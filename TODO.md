@@ -17,12 +17,24 @@
 ## Milestone 4: UI/UX Foundation
 - [x] Tray icon and menu
 - [x] Format selection popup
+- [ ] App look and feel: 
+    - Modern, dark theme with orange and gray as primary colors.
+    - Highlighted item uses a green marker color.
+    - Selector dialog: fixed size, always fits all items (no scrolling needed in any direction).
+    - Top: app name and clipboard-fetched MAC address (monospace font, min 14px).
+    - Main window uses a background texture.
+    - Instructions moved to bottom, inside a visually distinct sub-window ("instructions" color theme, with icons for keys).
+    - Tray menu: include all standard options (Open Settings, About, Quit, Help, etc.), auto-generate content, display MIT license and credits as needed.
+    - After first execution: show a notification (auto-disappearing, no user interaction) that the app is running.
+    - After selection/minimize: show a brief notification that the app is still running in the tray (auto-disappearing).
+    - Use icons for key instructions.
+    - Window always appears centered on the active screen, regardless of resolution.
 
 ## Milestone 5: Preferences & Autostart
 - [x] User preferences
-- [x] Autostart (optional)
+- [ ] Autostart if selected app should autostart on windows startup if unicked it should not start. pay attention when installer installs app to ask the user if he desires the app to autostart.
 - [ ] Implement persistent settings (hotkey, timeout, default MAC format) with both a config file (standardized location, e.g. %APPDATA%/mac-converter-2/settings.json) and a settings dialog accessible from the tray menu. Settings must persist between app executions. When packaging as an installer, ensure settings are stored in a user-writable, standard location.
-
+s
 ## Milestone 6: Packaging & Installer
 - [x] Compile to .exe (PyInstaller)
 - [ ] Full Windows installer (Start Menu shortcut, autostart, per-user/system-wide install) [Planned, not started]
