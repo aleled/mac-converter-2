@@ -6,8 +6,12 @@
 # Changelog
 
 ## [Unreleased]
-- Project initialized
-- Documentation and planning files created
+- Major debug session for selector dialog: added detailed debug output for navigation, selection, and cell state.
+- Improved highlight: selected cell now has green background, orange text, and bold font for maximum visibility.
+- Navigation logic confirmed: only columns 1 and 2 are selectable, up/down/left/right keys work as intended.
+- Reduced dialog spam in console by throttling repeated messages.
+- Added cell state printout for further troubleshooting.
+- All changes committed and session state saved for seamless continuation.
 
 ## [2025-06-04] Major documentation and maintenance update:
 - All functions and classes now have detailed docstrings (clipboard_hotkey.py, mac_formats.py, test_mac_formats.py)

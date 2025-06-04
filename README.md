@@ -79,6 +79,12 @@ This will point your local repository to the correct remote on GitHub. After thi
   - The user can use the arrow keys (up, down, left, right), ESC, and ENTER to navigate, select, or exit.
   - Once a value is selected, it is copied to the clipboard and the window hides (minimized back to the tray bar).
 
+## Debugging and UI/UX Improvements (2025-06-05)
+- Selector dialog navigation and highlight logic are robust and debugged.
+- Only columns 1 and 2 are selectable; highlight is green with orange text and bold font.
+- Debug output is present for troubleshooting and will be removed in the next session.
+- Session state and progress are preserved for seamless continuation.
+
 ## Project Status (2025-06-04)
 - All code and tests now have thorough docstrings.
 - Persistent Windows focus bug is documented in TODO.md and code comments.

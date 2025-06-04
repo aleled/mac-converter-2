@@ -94,4 +94,12 @@
 
 ---
 
+## [2025-06-05]
+- Debugged and improved MAC format selector dialog: ensured only columns 1/2 are selectable, highlight is visible, and navigation is robust.
+- Added detailed debug output for all navigation and selection actions, including cell state printout.
+- Reduced dialog spam in console for easier debugging.
+- All changes committed and session state saved for seamless continuation in next session.
+
+---
+
 Each session will be logged here with a summary of work done, pending tasks, and next steps.

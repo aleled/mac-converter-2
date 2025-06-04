@@ -81,3 +81,9 @@ s
 - [ ] Regularly update and track milestone progress in this file and in the changelog during development. Ensure all completed, in-progress, and planned tasks are clearly marked and up to date.
 
 Add new tasks below as needed.
+
+- [x] Debug and confirm selector dialog navigation and highlight logic (2025-06-05)
+- [x] Add detailed debug output for navigation, selection, and cell state
+- [x] Reduce dialog spam in console
+- [ ] Remove debug output and finalize UI polish (next session)
+- [ ] Continue with tray menu/notification improvements and any further user-requested features
