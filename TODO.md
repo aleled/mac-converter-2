@@ -55,4 +55,11 @@
 ## Known Issues
 - Windows: Dialog focus/foreground bug persists despite all known workarounds (dummy window, SetForegroundWindow, etc.). See code and comments for details. No further workaround planned.
 
+## Roadmap / TODO (as of 2025-06-04)
+- Implement persistent settings (hotkey, timeout, default MAC format) with both a config file (standardized location, e.g. %APPDATA%/mac-converter-2/settings.json) and a settings dialog accessible from the tray menu. Settings must persist between app executions. When packaging as an installer, ensure settings are stored in a user-writable, standard location.
+- Add notification (popup or sound) when a MAC address is converted (user-configurable in settings). [Planned, not started]
+- Full Windows installer (Start Menu shortcut, autostart, per-user/system-wide install) [Planned, not started]
+- Add screenshots/GIFs and troubleshooting section to README.md [Planned, not started]
+- Revisit release planning and cross-platform support at a later stage.
+
 Add new tasks below as needed.
