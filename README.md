@@ -1,3 +1,8 @@
+# Git user info for project commits:
+# Name: Alejandro Lichtenfeld
+# Email: 4leled@gmail.com
+# (Set globally in git config as of 2025-06-04)
+
 # MAC Address Converter
 
 A Windows system tray utility for converting MAC addresses between industry formats with a global hotkey and clipboard integration.
