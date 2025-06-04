@@ -1,0 +1,9 @@
+# Python requirements for MAC Address Converter
+pystray
+Pillow
+keyboard
+pyperclip
+PyInstaller
+pynput
+PyQt5
+PyQt5
