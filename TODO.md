@@ -62,4 +62,6 @@
 - Add screenshots/GIFs and troubleshooting section to README.md [Planned, not started]
 - Revisit release planning and cross-platform support at a later stage.
 
+- [ ] Regularly update and track milestone progress in this file and in the changelog during development. Ensure all completed, in-progress, and planned tasks are clearly marked and up to date.
+
 Add new tasks below as needed.
