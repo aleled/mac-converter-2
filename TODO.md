@@ -1,35 +1,39 @@
 # TODO / Feature Tracker
 
 ## Milestone 1: Project Setup & Planning
-- [ ] Initialize git repository
-- [ ] Create documentation files
-- [ ] Define MAC address formats (8 total)
-- [ ] Set up Python environment
+- [x] Initialize git repository
+- [x] Create documentation files
+- [x] Define MAC address formats (8 total)
+- [x] Set up Python environment
 
 ## Milestone 2: Core Functionality
-- [ ] Implement MAC address parsing/conversion
-- [ ] Add unit tests
+- [x] Implement MAC address parsing/conversion
+- [x] Add unit tests
 
 ## Milestone 3: Clipboard & Hotkey
-- [ ] Clipboard integration
-- [ ] Global hotkey (configurable, conflict-checked)
+- [x] Clipboard integration
+- [x] Global hotkey (configurable, conflict-checked)
 
 ## Milestone 4: UI/UX Foundation
-- [ ] Tray icon and menu
-- [ ] Format selection popup
+- [x] Tray icon and menu
+- [x] Format selection popup
 
 ## Milestone 5: Preferences & Autostart
-- [ ] User preferences
-- [ ] Autostart (optional)
+- [x] User preferences
+- [x] Autostart (optional)
+- [ ] Implement persistent settings (hotkey, timeout, default MAC format) with both a config file (standardized location, e.g. %APPDATA%/mac-converter-2/settings.json) and a settings dialog accessible from the tray menu. Settings must persist between app executions. When packaging as an installer, ensure settings are stored in a user-writable, standard location.
 
 ## Milestone 6: Packaging & Installer
-- [ ] Compile to .exe (PyInstaller)
-- [ ] Create Windows installer
+- [x] Compile to .exe (PyInstaller)
+- [ ] Full Windows installer (Start Menu shortcut, autostart, per-user/system-wide install) [Planned, not started]
 - [ ] Add uninstall/autostart options
 
 ## Milestone 7: Documentation & QA
-- [ ] Update docs, logs, changelogs
-- [ ] Manual/automated testing
+- [x] Update docs, logs, changelogs
+- [x] Manual/automated testing
+- [ ] Add screenshots/GIFs and troubleshooting section to README.md [Planned, not started]
+- [ ] Add notification (popup or sound) when a MAC address is converted (user-configurable in settings). [Planned, not started]
+- [ ] Regularly update and track milestone progress in this file and in the changelog during development. Ensure all completed, in-progress, and planned tasks are clearly marked and up to date.
 
 ## Milestone 8: Linux Support (Future)
 - [ ] Add Linux support for all features
