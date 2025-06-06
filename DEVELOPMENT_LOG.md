@@ -116,4 +116,17 @@
 
 ---
 
+## 2025-06-07
+- Added persistent user preferences: autostart, default format, timer, about/credits/license info (settings stored in %APPDATA%/mac-converter-2/settings.json)
+- Added settings dialog accessible from tray menu (change preferences: autostart, default format, timer, etc.)
+- Added About dialog with app info, author, credits, and MIT license
+- App always loads/saves settings from %APPDATA%/mac-converter-2/settings.json
+- App uses default format and timer from settings
+- Implemented autostart logic: add/remove from Windows startup based on user preference
+- Added robust error handling for settings file
+- Info box always shows correct MAC address from clipboard
+- Minor UI/UX polish and finalized English phrasing
+
+---
+
 Each session will be logged here with a summary of work done, pending tasks, and next steps.

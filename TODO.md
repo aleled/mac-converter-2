@@ -31,10 +31,16 @@
     - Window always appears centered on the active screen, regardless of resolution.
 
 ## Milestone 5: Preferences & Autostart
-- [x] User preferences
-- [ ] Autostart if selected app should autostart on windows startup if unicked it should not start. pay attention when installer installs app to ask the user if he desires the app to autostart.
-- [ ] Implement persistent settings (hotkey, timeout, default MAC format) with both a config file (standardized location, e.g. %APPDATA%/mac-converter-2/settings.json) and a settings dialog accessible from the tray menu. Settings must persist between app executions. When packaging as an installer, ensure settings are stored in a user-writable, standard location.
-s
+- [x] User preferences: autostart, default format, timer, about/credits/license info (settings stored in %APPDATA%/mac-converter-2/settings.json)
+- [x] Settings dialog accessible from tray menu (change preferences: autostart, default format, timer, etc.)
+- [x] About dialog with app info, author, credits, and MIT license
+- [x] App always loads/saves settings from %APPDATA%/mac-converter-2/settings.json
+- [x] App uses default format and timer from settings
+- [x] Autostart logic: add/remove from Windows startup based on user preference
+- [x] Robust error handling for settings file
+- [ ] Polish UI for settings/about dialogs
+- [ ] Update README.md and CHANGELOG.md to reflect new settings features and usage
+
 ## Milestone 6: Packaging & Installer
 - [x] Compile to .exe (PyInstaller)
 - [ ] Full Windows installer (Start Menu shortcut, autostart, per-user/system-wide install) [Planned, not started]

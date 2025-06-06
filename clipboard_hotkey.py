@@ -31,6 +31,7 @@ import queue
 import ctypes
 import time
 import keyboard as kb  # pip install keyboard
+import json
 
 # --- Admin Privilege Check for keyboard package ---
 def is_admin():
@@ -98,26 +99,24 @@ try:
     ALIGN_VCENTER = Qt.AlignmentFlag.AlignVCenter
     ALIGN_RIGHT = Qt.AlignmentFlag.AlignRight
     ALIGN_CENTER = Qt.AlignmentFlag.AlignCenter
-    def qt_align(val):
-        return val
+    qt_align = lambda val: val
 except AttributeError:
-    def qt_align(val):
-        return Qt.Alignment(val)
     ALIGN_LEFT = 0x0001
     ALIGN_VCENTER = 0x0080
     ALIGN_RIGHT = 0x0002
     ALIGN_CENTER = 0x0084
+    qt_align = lambda val: Qt.Alignment(val)
 
 class FormatSelector(QDialog):
     """
     PyQt5 dialog for selecting a MAC address format. Modern dark theme, orange/gray palette, green highlight, background texture, and improved layout per UI/UX requirements.
     Now uses a custom QWidget-based layout to mimic a table, avoiding QTableWidget confusion.
     """
-    def __init__(self, formats, timeout=6, clipboard_mac=None):
+    def __init__(self, formats, timeout=None, clipboard_mac=None):
         super().__init__()
         self.formats = formats
         self.selected = None
-        self.timeout = timeout
+        self.timeout = timeout if timeout is not None else settings.get('timer', 8)
         self.current_row = 0
         self.current_col = 0  # 0 = UPPER CASE, 1 = LOWER CASE
         self.timer = QTimer(self)
@@ -132,8 +131,11 @@ class FormatSelector(QDialog):
         self.setWindowTitle("MAC Address Converter")
         self.setWindowIcon(QIcon(get_icon_path()))
         self.setFixedSize(700, 400)
+        # Fix WindowStaysOnTopHint for PyQt5 compatibility
         try:
-            self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+            flag = getattr(Qt, 'WindowStaysOnTopHint', None)
+            if flag is not None:
+                self.setWindowFlags(self.windowFlags() | flag)
         except Exception:
             pass
         title = QLabel("Select which mac address to copy to clipboard")
@@ -347,9 +349,9 @@ class FormatSelector(QDialog):
         else:
             super().keyPressEvent(a0)
 
-    def mousePressEvent(self, e):
-        if e is not None:
-            pos = e.pos()
+    def mousePressEvent(self, a0):
+        if a0 is not None:
+            pos = a0.pos()
             # Map click to cell by checking label geometries
             found = False
             for row in range(len(self.cell_labels)):
@@ -377,7 +379,7 @@ class FormatSelector(QDialog):
                 if found:
                     break
         # else: ignore clicks outside selectable cells
-        super().mousePressEvent(e)
+        super().mousePressEvent(a0)
 
     def mouseDoubleClickEvent(self, a0):
         # For robustness, treat double-click the same as single click
@@ -450,7 +452,7 @@ def show_format_selector_from_queue():
     dummy.hide()
     dummy.deleteLater()
     # Keep a reference to the dialog to prevent garbage collection
-    dlg = FormatSelector(formats, clipboard_mac=clipboard_mac)
+    dlg = FormatSelector(formats, timeout=settings.get('timer', 8), clipboard_mac=clipboard_mac)
     _dlg_refs.append(dlg)
     dlg.show()
     dlg.raise_()
@@ -479,12 +481,20 @@ def handle_hotkey(app):
     formats = convert_mac(mac)
     dialog_request_queue.put((formats, mac))
 
+# --- About Dialog Stub ---
+from PyQt5.QtWidgets import QMessageBox
+
+def show_about_dialog():
+    QMessageBox.information(None, "About MAC Address Converter", settings['about'])
+
+# --- Tray Menu: Add About, Settings, License ---
 def tray_app():
     """
     Starts the system tray icon with a Quit menu item. Runs in a background thread.
     """
     try:
         icon = pystray.Icon("mac_converter", create_image(), "MAC Converter", menu=pystray.Menu(
+            pystray.MenuItem("About", lambda icon, item: show_about_dialog()),
             pystray.MenuItem("Quit", on_quit)
         ))
         icon.run()
@@ -505,6 +515,41 @@ def listen_hotkey(app):
     kb.add_hotkey('alt+shift+m', on_hotkey, suppress=True)
     print("[INFO] Hotkey Alt+Shift+M registered (requires admin on Windows). Press Alt+Shift+M to activate.")
     return kb
+
+# --- Settings: Load/Save Logic ---
+SETTINGS_DIR = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'mac-converter-2')
+SETTINGS_PATH = os.path.join(SETTINGS_DIR, 'settings.json')
+DEFAULT_SETTINGS = {
+    'autostart': False,
+    'default_format': 0,  # index in formats list
+    'timer': 8,  # seconds
+    'author': 'A. Lederman',
+    'license': 'MIT',
+    'about': 'MAC Address Converter Utility v2.0\nAuthor: A. Lederman\nLicense: MIT\nhttps://github.com/aleled/mac-converter-2'
+}
+
+def load_settings():
+    if not os.path.exists(SETTINGS_PATH):
+        os.makedirs(SETTINGS_DIR, exist_ok=True)
+        save_settings(DEFAULT_SETTINGS)
+        return DEFAULT_SETTINGS.copy()
+    try:
+        with open(SETTINGS_PATH, 'r', encoding='utf-8') as f:
+            s = json.load(f)
+        # Fill in any missing keys
+        for k, v in DEFAULT_SETTINGS.items():
+            if k not in s:
+                s[k] = v
+        return s
+    except Exception:
+        return DEFAULT_SETTINGS.copy()
+
+def save_settings(settings):
+    os.makedirs(SETTINGS_DIR, exist_ok=True)
+    with open(SETTINGS_PATH, 'w', encoding='utf-8') as f:
+        json.dump(settings, f, indent=2)
+
+settings = load_settings()
 
 # --- Main ---
 def main():

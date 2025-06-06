@@ -13,6 +13,22 @@
 - Added cell state printout for further troubleshooting.
 - All changes committed and session state saved for seamless continuation.
 
+## [2.1.0] - 2025-06-07
+### Added
+- Persistent user preferences: autostart, default format, timer, about/credits/license info (settings stored in %APPDATA%/mac-converter-2/settings.json)
+- Settings dialog accessible from tray menu (change preferences: autostart, default format, timer, etc.)
+- About dialog with app info, author, credits, and MIT license
+
+### Changed
+- App always loads/saves settings from %APPDATA%/mac-converter-2/settings.json
+- App uses default format and timer from settings
+- Autostart logic: add/remove from Windows startup based on user preference
+- Robust error handling for settings file
+
+### Fixed
+- Info box always shows correct MAC address from clipboard
+- Minor UI/UX polish and English phrasing finalized
+
 ## [2.0.0] - 2025-06-06
 ### Added
 - Robust global hotkey (Alt+Shift+M) using the keyboard package (suppressed, admin required on Windows).

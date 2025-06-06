@@ -12,6 +12,9 @@ A Windows system tray utility for converting MAC addresses between industry form
 - Global hotkey (Alt+Shift+M) to trigger the format selector dialog (requires admin on Windows).
 - Modern, robust, and visually clear UI/UX with keyboard and mouse navigation.
 - Info box always shows the original MAC address from the clipboard.
+- Persistent user preferences: autostart, default format, timer, about/credits/license info (settings stored in %APPDATA%/mac-converter-2/settings.json).
+- Settings dialog accessible from tray menu (change preferences: autostart, default format, timer, etc.).
+- About dialog with app info, author, credits, and MIT license.
 - No debug output or legacy code; codebase is clean and production-ready.
 - Tray quit is clean and error-free.
 
