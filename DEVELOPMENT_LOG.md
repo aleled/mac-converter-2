@@ -102,4 +102,18 @@
 
 ---
 
+## 2025-06-06
+- Finalized UI/UX: modern, robust, and visually clear format selector dialog.
+- Hotkey (Alt+Shift+M) is robust, suppressed, and requires admin on Windows.
+- Info box always shows the correct MAC address from the clipboard.
+- Removed all legacy/unused code and debug output.
+- Documentation and comments updated for clarity.
+- Tray quit is clean and error-free.
+- v2.0 stable milestone reached.
+
+## Next Steps
+- Optional polish, packaging, and user feedback.
+
+---
+
 Each session will be logged here with a summary of work done, pending tasks, and next steps.

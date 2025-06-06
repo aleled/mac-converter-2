@@ -13,6 +13,21 @@
 - Added cell state printout for further troubleshooting.
 - All changes committed and session state saved for seamless continuation.
 
+## [2.0.0] - 2025-06-06
+### Added
+- Robust global hotkey (Alt+Shift+M) using the keyboard package (suppressed, admin required on Windows).
+- Info box always shows the correct MAC address from the clipboard.
+- Modern, visually clear, and user-friendly format selector dialog.
+- Clean tray quit and error-free shutdown.
+
+### Changed
+- Removed all legacy/unused QTableWidget code and debug output.
+- Updated all documentation and comments for clarity and accuracy.
+
+### Fixed
+- No more 'M' characters in terminal after exit.
+- Info box never shows '(none)' if a MAC is present.
+
 ## [2025-06-04] Major documentation and maintenance update:
 - All functions and classes now have detailed docstrings (clipboard_hotkey.py, mac_formats.py, test_mac_formats.py)
 - Documented persistent Windows focus bug and all attempted workarounds in TODO.md

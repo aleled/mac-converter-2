@@ -3,18 +3,25 @@
 # Email: 4leled@gmail.com
 # (Set globally in git config as of 2025-06-04)
 
-# MAC Address Converter
+# MAC Address Converter Utility
 
 A Windows system tray utility for converting MAC addresses between industry formats with a global hotkey and clipboard integration.
 
 ## Features
-- Convert MAC addresses between 8 industry formats (upper/lower case)
-- Global hotkey (default: Alt+Shift+M, user-configurable)
-- Clipboard integration
-- System tray icon with options menu
-- User preferences (hotkey, default format, autostart)
-- Windows installer and autostart
-- Milestone-based development with full documentation
+- System tray utility for Windows (and WSL/Linux) to convert and copy MAC addresses in multiple formats.
+- Global hotkey (Alt+Shift+M) to trigger the format selector dialog (requires admin on Windows).
+- Modern, robust, and visually clear UI/UX with keyboard and mouse navigation.
+- Info box always shows the original MAC address from the clipboard.
+- No debug output or legacy code; codebase is clean and production-ready.
+- Tray quit is clean and error-free.
+
+## Milestones
+- v2.0: Stable release with all UI/UX, hotkey, and info box improvements.
+
+## Usage
+1. Run as administrator (Windows) for hotkey support.
+2. Copy a MAC address to clipboard.
+3. Press Alt+Shift+M to open the selector and copy the desired format.
 
 ## Roadmap / TODO (as of 2025-06-04)
 - [ ] Implement persistent settings (hotkey, timeout, default MAC format) with both a config file (standardized location, e.g. %APPDATA%/mac-converter-2/settings.json) and a settings dialog accessible from the tray menu.

@@ -17,7 +17,7 @@
 ## Milestone 4: UI/UX Foundation
 - [x] Tray icon and menu
 - [x] Format selection popup
-- [ ] App look and feel: 
+- [x] App look and feel: 
     - Modern, dark theme with orange and gray as primary colors.
     - Highlighted item uses a green marker color.
     - Selector dialog: fixed size, always fits all items (no scrolling needed in any direction).
@@ -87,3 +87,18 @@ Add new tasks below as needed.
 - [x] Reduce dialog spam in console
 - [ ] Remove debug output and finalize UI polish (next session)
 - [ ] Continue with tray menu/notification improvements and any further user-requested features
+
+# TODO
+
+- [x] Robust, admin-requiring hotkey (keyboard package)
+- [x] Info box always shows correct MAC
+- [x] Modern, robust, and visually clear UI/UX
+- [x] Remove all legacy/unused code and debug output
+- [x] Clean up documentation and comments
+- [x] Clean tray quit and error-free shutdown
+
+## Next Steps
+- [ ] Optional: Polish UI further (colors, spacing, etc.)
+- [ ] Optional: Add installer or packaging for Windows
+- [ ] Optional: Add user preferences (autostart, default format, etc.)
+- [ ] Gather user feedback for future improvements
