@@ -129,4 +129,11 @@
 
 ---
 
+## 2025-06-07: UI/UX and Window Management Guidelines Added
+
+- Added general guidelines for window independence, hotkey behavior, and tray menu window exclusivity to documentation.
+- See README.md and TODO.md for details.
+
+---
+
 Each session will be logged here with a summary of work done, pending tasks, and next steps.

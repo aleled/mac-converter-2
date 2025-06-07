@@ -485,7 +485,30 @@ def handle_hotkey(app):
 from PyQt5.QtWidgets import QMessageBox
 
 def show_about_dialog():
-    QMessageBox.information(None, "About MAC Address Converter", settings['about'])
+    """
+    Shows a modal About dialog that blocks all other app windows until closed. No timer, no auto-close.
+    """
+    from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
+    from PyQt5.QtCore import Qt
+    app = QApplication.instance()
+    dlg = QDialog(None)
+    dlg.setWindowTitle("About MAC Address Converter")
+    modality = getattr(Qt, 'WindowModal', None)
+    if modality is not None:
+        dlg.setWindowModality(modality)
+    stays_on_top = getattr(Qt, 'WindowStaysOnTopHint', None)
+    if stays_on_top is not None:
+        dlg.setWindowFlags(dlg.windowFlags() | stays_on_top)
+    layout = QVBoxLayout()
+    label = QLabel(settings['about'])
+    label.setWordWrap(True)
+    layout.addWidget(label)
+    btn = QPushButton("OK")
+    btn.clicked.connect(lambda: dlg.done(0))  # Use done(0) to close immediately
+    layout.addWidget(btn)
+    dlg.setLayout(layout)
+    dlg.setFixedWidth(400)
+    dlg.exec_()  # Modal: blocks until closed
 
 # --- Tray Menu: Add About, Settings, License ---
 def tray_app():

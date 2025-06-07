@@ -108,3 +108,12 @@ Add new tasks below as needed.
 - [ ] Optional: Add installer or packaging for Windows
 - [ ] Optional: Add user preferences (autostart, default format, etc.)
 - [ ] Gather user feedback for future improvements
+
+## UI/UX and Window Management Guidelines
+
+- The hotkey opens the main window.
+- Tray menu opens About, Settings, and future windows (TBD).
+- Each window is fully independent (no shared logic except UI/UX look and feel).
+- Hotkey must not interfere with any other app element or block execution.
+- If a tray menu window is open, no other window can be opened until it is closed.
+- All windows must have standard controls (close, minimize, etc).

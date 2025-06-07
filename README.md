@@ -1,3 +1,5 @@
+> **NOTE:** For future development, always update this file, LICENSE.txt, and requirements.txt whenever new libraries, features, or external code are added. Ensure all legal attributions, author info, and license details are current and correct.
+
 # Git user info for project commits:
 # Name: Alejandro Lichtenfeld
 # Email: 4leled@gmail.com
@@ -19,6 +21,7 @@ A Windows system tray utility for converting MAC addresses between industry form
 - Tray quit is clean and error-free.
 
 ## Milestones
+- v2.1: Persistent user preferences, settings dialog, about dialog, robust error handling, and documentation polish.
 - v2.0: Stable release with all UI/UX, hotkey, and info box improvements.
 
 ## Usage
@@ -100,3 +103,14 @@ This will point your local repository to the correct remote on GitHub. After thi
 - Persistent Windows focus bug is documented in TODO.md and code comments.
 - Old/unused files moved to old/ for archival.
 - See CHANGELOG.md for full details.
+
+## HOW TO COOK: General Guidelines
+
+1. The hotkey opens a window, referred to as the "main window".
+2. The tray menu opens other windows such as About, Settings, and possibly future ones (names TBD).
+3. Each window is independent from the others. No shared functions, callbacks, timers, or deadlocks. The only thing in common is the UI/UX design look and feel.
+4. The hotkey must not interfere in any way with the operation of any other app element, keys, bindings, or block execution.
+5. If any window launched from the tray menu is open, it will not allow moving to any other window until it is closed.
+6. Every window should have common control buttons like Close, Minimize, etc.
+
+See also: TODO.md and DEVELOPMENT_LOG.md for implementation notes.
