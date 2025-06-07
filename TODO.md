@@ -1,5 +1,9 @@
 # TODO / Feature Tracker
 
+## Version 2.1.0 (feature branch)
+
+- All new development continues here.
+
 ## Milestone 1: Project Setup & Planning
 - [x] Initialize git repository
 - [x] Create documentation files

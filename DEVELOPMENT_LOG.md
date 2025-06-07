@@ -136,4 +136,11 @@
 
 ---
 
+## 2025-06-07: Version Bump
+
+- Created new branch feature/v2.1.0 for continued development.
+- Updated version references to 2.1.0 in documentation.
+
+---
+
 Each session will be logged here with a summary of work done, pending tasks, and next steps.

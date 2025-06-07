@@ -24,6 +24,10 @@ A Windows system tray utility for converting MAC addresses between industry form
 - v2.1: Persistent user preferences, settings dialog, about dialog, robust error handling, and documentation polish.
 - v2.0: Stable release with all UI/UX, hotkey, and info box improvements.
 
+## Version
+
+Current version: 2.1.0 (feature branch)
+
 ## Usage
 1. Run as administrator (Windows) for hotkey support.
 2. Copy a MAC address to clipboard.
