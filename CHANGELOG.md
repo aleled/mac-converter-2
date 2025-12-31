@@ -5,7 +5,35 @@
 
 # Changelog
 
-## [Unreleased]
+## [2.2.0] - 2025-12-31
+### Added
+- Auto-cycling MAC format converter: each hotkey press cycles to the next format (0→1→2→...→9→0)
+- Tray notifications for converted MAC addresses (configurable duration, default 3 seconds)
+- Error notifications for invalid MAC addresses in clipboard
+- Configurable global hotkey via Settings dialog (default alt+shift+m)
+- Configurable notification duration (1-10 seconds) via Settings dialog
+- Threading.Timer-based notification auto-dismiss for precise duration control
+
+### Changed
+- Removed FormatSelector dialog entirely - replaced with instant auto-cycling and notifications
+- Settings structure: replaced 'default_format' and 'timer' with 'last_format_index', 'hotkey', 'notification_duration'
+- Hotkey implementation: switched from hardcoded Alt+Shift+M to settings-configurable hotkey
+- Fixed author name from "A. Lederman" to "Alejandro Lichtenfeld"
+- Version updated to 2.2.0
+
+### Removed
+- FormatSelector QDialog class (315+ lines of code)
+- dialog_request_queue and dialog_open global state
+- bring_to_foreground() and safe_bring_to_foreground() functions (focus management no longer needed)
+- show_format_selector_from_queue() function
+- Admin privilege check and keyboard package dependency
+- Legacy dialog-based format selection UI/UX
+
+### Fixed
+- Author name correction in settings and about text
+- Notification system now respects user-configured duration settings
+
+## [Unreleased - Previous Session]
 - Major debug session for selector dialog: added detailed debug output for navigation, selection, and cell state.
 - Improved highlight: selected cell now has green background, orange text, and bold font for maximum visibility.
 - Navigation logic confirmed: only columns 1 and 2 are selectable, up/down/left/right keys work as intended.
@@ -24,6 +52,8 @@
 - App uses default format and timer from settings
 - Autostart logic: add/remove from Windows startup based on user preference
 - Robust error handling for settings file
+- Switched from keyboard (admin required) to pynput for global hotkey registration (no admin required).
+- The app no longer requires administrator rights for any feature. This is now a permanent design constraint for all future development.
 
 ### Fixed
 - Info box always shows correct MAC address from clipboard

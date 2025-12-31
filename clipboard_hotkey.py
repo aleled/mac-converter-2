@@ -23,25 +23,15 @@ import sys
 from mac_formats import detect_mac, convert_mac
 import platform
 import os
-from PyQt5.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QHBoxLayout, QWidget, QSizePolicy
+from PyQt5.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QHBoxLayout, QWidget, QSizePolicy, QCheckBox, QPushButton, QLineEdit, QSpinBox
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QColor, QIcon, QBrush
 from PyQt5.QtCore import QTimer
 import queue
 import ctypes
 import time
-import keyboard as kb  # pip install keyboard
+from pynput import keyboard
 import json
-
-# --- Admin Privilege Check for keyboard package ---
-def is_admin():
-    try:
-        return ctypes.windll.shell32.IsUserAnAdmin()
-    except Exception:
-        return False
-
-if not is_admin():
-    print("[WARNING] This script must be run as Administrator for global hotkeys to work on Windows (keyboard package requirement).\nRight-click PowerShell and choose 'Run as administrator'.")
 
 # --- Tray Icon Setup ---
 def get_icon_path():
@@ -83,407 +73,103 @@ def on_quit(icon, item):
     global listener
     icon.stop()
     if listener:
-        listener.unhook_all_hotkeys()
+        listener.stop()
     exit_event.set()
     app = QApplication.instance()
     if app:
         app.quit()
 
 exit_event = threading.Event()
-dialog_request_queue = queue.Queue()
+about_dialog_request_queue = queue.Queue()
+settings_dialog_request_queue = queue.Queue()
 
-# --- PyQt Format Selector Dialog ---
-# Alignment helper for PyQt5/PySide2 compatibility
-try:
-    ALIGN_LEFT = Qt.AlignmentFlag.AlignLeft
-    ALIGN_VCENTER = Qt.AlignmentFlag.AlignVCenter
-    ALIGN_RIGHT = Qt.AlignmentFlag.AlignRight
-    ALIGN_CENTER = Qt.AlignmentFlag.AlignCenter
-    qt_align = lambda val: val
-except AttributeError:
-    ALIGN_LEFT = 0x0001
-    ALIGN_VCENTER = 0x0080
-    ALIGN_RIGHT = 0x0002
-    ALIGN_CENTER = 0x0084
-    qt_align = lambda val: Qt.Alignment(val)
+# Global icon reference for notifications
+tray_icon = None
+tray_icon_ready = threading.Event()
 
-class FormatSelector(QDialog):
+# Global hotkey listener
+listener = None
+
+# --- Helper function for notifications with custom duration ---
+def show_notification_with_duration(icon, message, title, duration_seconds):
     """
-    PyQt5 dialog for selecting a MAC address format. Modern dark theme, orange/gray palette, green highlight, background texture, and improved layout per UI/UX requirements.
-    Now uses a custom QWidget-based layout to mimic a table, avoiding QTableWidget confusion.
+    Show notification and auto-remove after specified duration.
+
+    Args:
+        icon (pystray.Icon): The tray icon instance.
+        message (str): The notification message (usually the MAC address).
+        title (str): The notification title.
+        duration_seconds (int): How long to display the notification in seconds.
     """
-    def __init__(self, formats, timeout=None, clipboard_mac=None):
-        super().__init__()
-        self.formats = formats
-        self.selected = None
-        self.timeout = timeout if timeout is not None else settings.get('timer', 8)
-        self.current_row = 0
-        self.current_col = 0  # 0 = UPPER CASE, 1 = LOWER CASE
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.on_timeout)
-        self.timer.setSingleShot(True)
-        self.selection_made = False
-        self.clipboard_mac = clipboard_mac
-        self.cell_labels = []  # 2D list: [row][col] -> QLabel
-        self.setup_ui()
-
-    def setup_ui(self):
-        self.setWindowTitle("MAC Address Converter")
-        self.setWindowIcon(QIcon(get_icon_path()))
-        self.setFixedSize(700, 400)
-        # Fix WindowStaysOnTopHint for PyQt5 compatibility
-        try:
-            flag = getattr(Qt, 'WindowStaysOnTopHint', None)
-            if flag is not None:
-                self.setWindowFlags(self.windowFlags() | flag)
-        except Exception:
-            pass
-        title = QLabel("Select which mac address to copy to clipboard")
-        title.setStyleSheet("background: #ff9800; color: #23272e; font-size: 20px; font-weight: bold; padding: 12px; border-radius: 8px; margin-bottom: 10px;")
-        mac_label = QLabel(f"<span style='font-family:monospace;font-size:16px;color:#ff9800'>{self.clipboard_mac or ''}</span>")
-        mac_label.setStyleSheet("color: #ff9800; background: transparent; margin-bottom: 8px;")
-        instr_box = QLabel(
-            "<span style='color:#fff;font-size:13px;'>"
-            "Use <b>↑</b> <b>↓</b> to move, <b>←</b> <b>→</b> to select UPPER/LOWER, <b>ENTER</b> to copy, <b>ESC</b> to cancel.<br>"
-            f"Auto-selects default after {self.timeout} seconds."
-            "</span>"
-        )
-        instr_box.setStyleSheet("background: #2d313a; border-radius: 6px; padding: 8px; margin-top: 10px; color: #ff9800;")
-
-        # --- Calculate max width for each column ---
-        font = QFont("Consolas", 14)
-        label_font = QFont()
-        label_font.setBold(True)
-        label_font.setPointSize(15)
-        fm_label = self.fontMetrics() if hasattr(self, 'fontMetrics') else None
-        # Gather all text for each column
-        label_texts = [self.formats[row*2][0].split()[0] for row in range(4)]
-        upper_texts = [self.formats[row*2][1] for row in range(4)]
-        lower_texts = [self.formats[row*2+1][1] for row in range(4)]
-        # Include headers
-        label_texts.append("")
-        upper_texts.append("Upper Case")
-        lower_texts.append("Lower Case")
-        # Use QFontMetrics to get pixel width
-        metrics = self.fontMetrics()
-        label_width = max([metrics.boundingRect(text).width() for text in label_texts]) + 24
-        upper_width = max([metrics.boundingRect(text).width() for text in upper_texts]) + 24
-        lower_width = max([metrics.boundingRect(text).width() for text in lower_texts]) + 24
-
-        # --- Custom Table-Like Layout ---
-        table_widget = QWidget()
-        table_layout = QVBoxLayout()
-        table_layout.setSpacing(0)
-        table_layout.setContentsMargins(0, 0, 0, 0)
-        # Header row
-        header_row = QHBoxLayout()
-        header_row.setSpacing(0)
-        header_row.setContentsMargins(0, 0, 0, 0)
-        header_label = self._make_header_label("Description", qt_align(ALIGN_LEFT | ALIGN_VCENTER), label_width)
-        header_upper = self._make_header_label("Upper Case", qt_align(ALIGN_LEFT | ALIGN_VCENTER), upper_width)
-        header_lower = self._make_header_label("Lower Case", qt_align(ALIGN_LEFT | ALIGN_VCENTER), lower_width)
-        header_row.addWidget(header_label)
-        header_row.addWidget(header_upper)
-        header_row.addWidget(header_lower)
-        table_layout.addLayout(header_row)
-        self.cell_labels = []
-        row_layouts = []  # Store row layouts for post-layout sizing
-        label_widgets = [header_label]
-        upper_widgets = [header_upper]
-        lower_widgets = [header_lower]
-        for row in range(4):
-            row_layout = QHBoxLayout()
-            row_layout.setSpacing(0)
-            row_layout.setContentsMargins(0, 0, 0, 0)
-            # Use the full description for the first column
-            style_name = self.formats[row*2][0]
-            label = QLabel(style_name)
-            label.setStyleSheet("background: #23272e; color: #ff9800; font-weight: bold; font-size: 17px; padding: 8px 0px 8px 16px;")
-            label.setAlignment(qt_align(ALIGN_LEFT | ALIGN_VCENTER))
-            label.setMinimumWidth(label_width)
-            row_layout.addWidget(label)
-            row_cells = []
-            label_widgets.append(label)
-            for col, width, col_widgets in zip(range(2), [upper_width, lower_width], [upper_widgets, lower_widgets]):
-                mac_val = self.formats[row*2+col][1]
-                cell = QLabel(mac_val)
-                cell.setFont(QFont("Consolas", 16))
-                cell.setAlignment(qt_align(ALIGN_LEFT | ALIGN_VCENTER))
-                cell.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-                cell.setMinimumWidth(width)
-                cell.setStyleSheet("padding: 8px 0px 8px 16px; background: #23272e; color: #fff; font-family: Consolas; font-size: 16px; border: none;")
-                row_layout.addWidget(cell)
-                row_cells.append(cell)
-                col_widgets.append(cell)
-            self.cell_labels.append(row_cells)
-            table_layout.addLayout(row_layout)
-            row_layouts.append(row_layout)
-        table_widget.setLayout(table_layout)
-
-        # --- Post-layout: ensure all widgets in a column have the same min width ---
-        columns = [label_widgets, upper_widgets, lower_widgets]
-        for col_widgets in columns:
-            max_width = max(w.sizeHint().width() for w in col_widgets if w is not None)
-            for w in col_widgets:
-                if w is not None:
-                    w.setMinimumWidth(max_width)
-
-        # Make window large enough to avoid scrollbars
-        self.setFixedSize(max(label_width + upper_width + lower_width + 80, 900), 420)
-
-        layout = QVBoxLayout()
-        # Move the instruction closer to the table, and show the clipboard mac above it
-        layout.addWidget(table_widget)
-        # Add the moved instruction right below the table
-        title = QLabel("Select which mac address to copy to clipboard")
-        title.setStyleSheet("background: #ff9800; color: #23272e; font-size: 20px; font-weight: bold; padding: 12px; border-radius: 8px; margin-bottom: 4px; margin-top: 10px;")
-        layout.addWidget(title)
-        # Information label for clipboard mac and timer
-        if not hasattr(self, '_initial_clipboard_mac') or not self._initial_clipboard_mac:
-            self._initial_clipboard_mac = self.clipboard_mac or "(none)"
-        self._info_mac_val = QLabel(self._initial_clipboard_mac)
-        self._info_mac_val.setStyleSheet("background: #e3f2fd; color: #1a237e; font-family: Consolas, monospace; padding: 8px 16px; border-top-right-radius: 7px; border-bottom-right-radius: 7px; font-size: 16px; border-left: 1.5px solid #90caf9;")
-        self._info_timer_val = QLabel(f"{self.timeout}")
-        self._info_timer_val.setStyleSheet("background: #fffde7; color: #b26a00; font-weight: bold; padding: 8px 16px; border-radius: 7px; font-size: 16px; margin-left: 8px; border: 1.5px solid #ffe082;")
-        mac_info = QWidget()
-        mac_info_layout = QHBoxLayout()
-        mac_info_layout.setContentsMargins(0, 0, 0, 0)
-        mac_info_layout.setSpacing(0)
-        label = QLabel("Mac address brought from clipboard:")
-        label.setStyleSheet("background: #1976d2; color: #fff; font-weight: bold; padding: 8px 12px; border-top-left-radius: 7px; border-bottom-left-radius: 7px; font-size: 15px;")
-        mac_info_layout.addWidget(label)
-        mac_info_layout.addWidget(self._info_mac_val)
-        # Timer label
-        timer_label = QLabel("Time left:")
-        timer_label.setStyleSheet("background: #fffde7; color: #b26a00; font-weight: bold; padding: 8px 12px; border-radius: 7px 0 0 7px; font-size: 15px; margin-left: 16px;")
-        mac_info_layout.addWidget(timer_label)
-        mac_info_layout.addWidget(self._info_timer_val)
-        mac_info.setLayout(mac_info_layout)
-        layout.addWidget(mac_info)
-        instr_box = QLabel(
-            "<span style='color:#fff;font-size:13px;'>"
-            "Use <b>↑</b> <b>↓</b> to move, <b>←</b> <b>→</b> to select UPPER/LOWER, <b>ENTER</b> to copy, <b>ESC</b> to cancel.<br>"
-            f"Auto-selects default after {self.timeout} seconds."
-            "</span>"
-        )
-        instr_box.setStyleSheet("background: #2d313a; border-radius: 6px; padding: 8px; margin-top: 4px; color: #ff9800;")
-        layout.addWidget(instr_box)
-        self.setLayout(layout)
-        self.current_row = 0
-        self.current_col = 0
-        self.update_selection()
-        self.timer.start(self.timeout * 1000)
-        self.setFocus()
-        # Add timer update
-        self._remaining_time = self.timeout
-        self._timer_tick = QTimer(self)
-        def _update_info_timer():
-            if self._remaining_time > 0:
-                self._remaining_time -= 1
-                self._info_timer_val.setText(str(self._remaining_time))
-            else:
-                self._timer_tick.stop()
-        self._update_info_timer = _update_info_timer
-        self._timer_tick.timeout.connect(self._update_info_timer)
-        self._timer_tick.start(1000)
-
-    def _make_header_label(self, text, align, min_width):
-        label = QLabel(text)
-        # Match cell left padding for perfect alignment, force left alignment
-        label.setStyleSheet("background: #23272e; color: #fff; font-weight: bold; font-size: 17px; padding: 8px 0px 8px 16px; border-bottom: 2px solid #444; text-align: left;")
-        label.setAlignment(align)
-        label.setMinimumWidth(min_width)
-        return label
-
-    def update_selection(self):
-        # Clamp indices
-        if self.current_col < 0:
-            self.current_col = 0
-        elif self.current_col > 1:
-            self.current_col = 1
-        if self.current_row < 0:
-            self.current_row = 0
-        elif self.current_row > 3:
-            self.current_row = 3
-        # Reset all cells
-        for row in range(4):
-            for col in range(2):
-                cell = self.cell_labels[row][col]
-                cell.setAlignment(qt_align(ALIGN_LEFT | ALIGN_VCENTER))
-                cell.setStyleSheet("padding: 8px 0px 8px 16px; background: #23272e; color: #fff; font-family: Consolas; font-size: 16px; border: none;")
-        # Highlight current cell
-        cell = self.cell_labels[self.current_row][self.current_col]
-        cell.setAlignment(qt_align(ALIGN_LEFT | ALIGN_VCENTER))
-        # Use a more vibrant purple for text on green background
-        cell.setStyleSheet("padding: 8px 0px 8px 16px; background: #39d353; color: #b266ff; font-family: Consolas; font-size: 16px; font-weight: bold; border: none;")
-
-    def keyPressEvent(self, a0):
-        # Only stop the main selection timer, never stop the info label timer
-        if self.timer and self.timer.isActive():
-            self.timer.stop()
-        key = a0.key() if a0 else None
-        if key == getattr(Qt, 'Key_Up', 0x01000013):
-            self.current_row = (self.current_row - 1) % 4
-            self.update_selection()
-        elif key == getattr(Qt, 'Key_Down', 0x01000015):
-            self.current_row = (self.current_row + 1) % 4
-            self.update_selection()
-        elif key == getattr(Qt, 'Key_Left', 0x01000012):
-            if self.current_col == 1:
-                self.current_col = 0
-                self.update_selection()
-        elif key == getattr(Qt, 'Key_Right', 0x01000014):
-            if self.current_col == 0:
-                self.current_col = 1
-                self.update_selection()
-        elif key == getattr(Qt, 'Key_Return', 0x01000004) or key == getattr(Qt, 'Key_Enter', 0x01000005):
-            self.selected = (self.current_row, self.current_col)
-            self.selection_made = True
-            idx = self.current_row*2 + self.current_col
-            pyperclip.copy(self.formats[idx][1])
-            self.hide()
-        elif key == getattr(Qt, 'Key_Escape', 0x01000000):
-            self.selected = None
-            self.selection_made = False
-            self.hide()
-        else:
-            super().keyPressEvent(a0)
-
-    def mousePressEvent(self, a0):
-        if a0 is not None:
-            pos = a0.pos()
-            # Map click to cell by checking label geometries
-            found = False
-            for row in range(len(self.cell_labels)):
-                for col in range(len(self.cell_labels[row])):
-                    cell = self.cell_labels[row][col]
-                    # Only columns 0 and 1 (index 0,1) are selectable
-                    if col not in (0, 1):
-                        continue
-                    rect = cell.geometry()
-                    # Map cell geometry to dialog coordinates
-                    cell_pos = cell.mapTo(self, rect.topLeft())
-                    cell_rect = rect.translated(cell_pos - rect.topLeft())
-                    if cell_rect.contains(pos):
-                        # Only allow selection for columns 0 and 1
-                        self.current_row = row
-                        self.current_col = col
-                        self.update_selection()
-                        self.selected = (row, col)
-                        self.selection_made = True
-                        idx = row*2 + col
-                        pyperclip.copy(self.formats[idx][1])
-                        self.hide()
-                        found = True
-                        break
-                if found:
-                    break
-        # else: ignore clicks outside selectable cells
-        super().mousePressEvent(a0)
-
-    def mouseDoubleClickEvent(self, a0):
-        # For robustness, treat double-click the same as single click
-        self.mousePressEvent(a0)
-
-    def hideEvent(self, a0):
-        """
-        Handles the dialog hide event. Resets the global dialog_open flag and stops the info label timer.
-        """
-        global dialog_open
-        dialog_open = False
-        if hasattr(self, '_timer_tick') and self._timer_tick.isActive():
-            self._timer_tick.stop()
-        super().hideEvent(a0)
-
-    def on_timeout(self):
-        """
-        Handles the dialog timeout event. Closes the dialog without selection.
-        """
-        self.selected = None
-        self.selection_made = False
-        self.hide()
-
-    def showEvent(self, a0):
-        super().showEvent(a0)
-        self.activateWindow()
-        self.raise_()
-        self.setFocus()
-        # Reset timer display on show
-        self._remaining_time = self.timeout
-        self._info_timer_val.setText(str(self._remaining_time))
-        if hasattr(self, '_timer_tick') and not self._timer_tick.isActive():
-            self._timer_tick.start(1000)
-        # Force window to foreground and focus on Windows
-        try:
-            hwnd = int(self.winId())
-            ctypes.windll.user32.ShowWindow(hwnd, 1)
-            ctypes.windll.user32.SetForegroundWindow(hwnd)
-            ctypes.windll.user32.SetFocus(hwnd)
-            ctypes.windll.user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)
-        except Exception as e:
-            print(f"[DEBUG] Foreground force failed: {e}")
-
-# --- Hotkey Handler ---
-dialog_open = False
-last_dialog_open_warning = 0
-_dlg_refs = []  # Keep dialog references alive
-
-def show_format_selector_from_queue():
-    """
-    Checks the dialog request queue and shows the FormatSelector dialog if not already open.
-    Ensures only one dialog is open at a time. Brings dialog to front and focuses it.
-    """
-    global dialog_open, last_dialog_open_warning, _dlg_refs
-    if dialog_open:
-        now = time.time()
-        last_dialog_open_warning = now
+    if not icon:
         return
-    try:
-        formats, clipboard_mac = dialog_request_queue.get_nowait()
-    except queue.Empty:
-        return
-    dialog_open = True
-    # --- Windows focus workaround: dummy window ---
-    dummy = QWidget()
-    dummy.setGeometry(0, 0, 1, 1)
-    dummy.show()
-    dummy.activateWindow()
-    dummy.raise_()
-    dummy.hide()
-    dummy.deleteLater()
-    # Keep a reference to the dialog to prevent garbage collection
-    dlg = FormatSelector(formats, timeout=settings.get('timer', 8), clipboard_mac=clipboard_mac)
-    _dlg_refs.append(dlg)
-    dlg.show()
-    dlg.raise_()
-    dlg.activateWindow()
-    dlg.setFocus()
-    try:
-        hwnd = int(dlg.winId())
-        ctypes.windll.user32.ShowWindow(hwnd, 1)
-        ctypes.windll.user32.SetForegroundWindow(hwnd)
-        ctypes.windll.user32.SetFocus(hwnd)
-        ctypes.windll.user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)
-    except Exception:
-        pass
+
+    icon.notify(message, title)
+
+    # Auto-remove after duration using threading.Timer
+    def remove():
+        try:
+            icon.remove_notification()
+        except:
+            pass  # Ignore errors if notification already dismissed
+
+    timer = threading.Timer(duration_seconds, remove)
+    timer.daemon = True
+    timer.start()
 
 def handle_hotkey(app):
     """
-    Handles the hotkey event: checks clipboard for a MAC address, converts it to all formats, and queues the format selector dialog.
+    Handle hotkey press: auto-cycle MAC format and show notification.
+    Uses global tray_icon variable to display notifications.
+
     Args:
         app (QApplication): The running Qt application instance.
     """
+    global tray_icon
+
     text = pyperclip.paste()
     mac = detect_mac(text)
+
     if not mac:
-        pyperclip.copy("not a valid mac :-)")
+        # Show error notification
+        if tray_icon:
+            duration = settings.get('notification_duration', 3)
+            show_notification_with_duration(
+                tray_icon,
+                "No valid MAC address in clipboard",
+                "MAC Converter",
+                duration
+            )
         return
+
+    # Get all formats
     formats = convert_mac(mac)
-    dialog_request_queue.put((formats, mac))
 
-# --- About Dialog Stub ---
-from PyQt5.QtWidgets import QMessageBox
+    # Auto-cycle to next format
+    last_idx = settings.get('last_format_index', 0)
+    next_idx = (last_idx + 1) % 10  # Cycle 0->1->...->9->0
 
+    # Get converted MAC (formats is list of tuples: [(name, value), ...])
+    converted_mac = formats[next_idx][1]
+
+    # Copy to clipboard
+    pyperclip.copy(converted_mac)
+
+    # Update last used format index
+    settings['last_format_index'] = next_idx
+    save_settings(settings)
+
+    # Show success notification with just the MAC address
+    if tray_icon:
+        duration = settings.get('notification_duration', 3)
+        show_notification_with_duration(
+            tray_icon,
+            converted_mac,
+            "MAC Converter",
+            duration
+        )
+
+# --- About Dialog ---
 def show_about_dialog():
     """
     Shows a modal About dialog that blocks all other app windows until closed. No timer, no auto-close.
@@ -510,45 +196,152 @@ def show_about_dialog():
     dlg.setFixedWidth(400)
     dlg.exec_()  # Modal: blocks until closed
 
-# --- Tray Menu: Add About, Settings, License ---
+# --- Settings Dialog ---
+class SettingsDialog(QDialog):
+    """Settings dialog for configuring hotkey and notification preferences."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("MAC Converter - Settings")
+        self.setModal(True)
+        try:
+            stays_on_top = getattr(Qt, 'WindowStaysOnTopHint', None)
+            if stays_on_top is not None:
+                self.setWindowFlags(self.windowFlags() | stays_on_top)
+        except Exception:
+            pass
+
+        layout = QVBoxLayout()
+
+        # Hotkey setting
+        hotkey_label = QLabel("Global Hotkey:")
+        self.hotkey_input = QLineEdit()
+        self.hotkey_input.setText(settings.get('hotkey', 'alt+shift+m'))
+        self.hotkey_input.setPlaceholderText("e.g., alt+shift+m, ctrl+shift+c")
+
+        # Notification duration setting
+        duration_label = QLabel("Notification Duration (seconds):")
+        self.duration_spinbox = QSpinBox()
+        self.duration_spinbox.setRange(1, 10)
+        self.duration_spinbox.setValue(settings.get('notification_duration', 3))
+
+        # Autostart setting
+        self.autostart_checkbox = QCheckBox("Start with Windows")
+        self.autostart_checkbox.setChecked(settings.get('autostart', False))
+
+        # Buttons
+        button_layout = QHBoxLayout()
+        save_button = QPushButton("Save")
+        cancel_button = QPushButton("Cancel")
+        save_button.clicked.connect(self.save_settings)
+        cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(save_button)
+        button_layout.addWidget(cancel_button)
+
+        # Add all to layout
+        layout.addWidget(hotkey_label)
+        layout.addWidget(self.hotkey_input)
+        layout.addWidget(duration_label)
+        layout.addWidget(self.duration_spinbox)
+        layout.addWidget(self.autostart_checkbox)
+        layout.addLayout(button_layout)
+
+        self.setLayout(layout)
+
+    def save_settings(self):
+        """Save settings and close dialog."""
+        settings['hotkey'] = self.hotkey_input.text().strip()
+        settings['notification_duration'] = self.duration_spinbox.value()
+        settings['autostart'] = self.autostart_checkbox.isChecked()
+        save_settings(settings)
+        self.accept()
+
+        # Note: Hotkey change requires app restart
+        # Could show a message box here to notify user
+
+def show_settings_dialog():
+    """Show settings dialog in main Qt thread."""
+    dlg = SettingsDialog()
+    dlg.exec_()
+
+# --- Tray Menu ---
 def tray_app():
     """
-    Starts the system tray icon with a Quit menu item. Runs in a background thread.
+    Starts the system tray icon with menu. Runs in a background thread.
+    Sets global tray_icon and signals tray_icon_ready.
     """
+    global tray_icon
     try:
-        icon = pystray.Icon("mac_converter", create_image(), "MAC Converter", menu=pystray.Menu(
-            pystray.MenuItem("About", lambda icon, item: show_about_dialog()),
-            pystray.MenuItem("Quit", on_quit)
-        ))
-        icon.run()
-    except Exception:
-        pass
+        def about_callback(icon, item):
+            about_dialog_request_queue.put(True)
+
+        def settings_callback(icon, item):
+            settings_dialog_request_queue.put(True)
+
+        tray_icon = pystray.Icon(
+            "mac_converter",
+            create_image(),
+            "MAC Converter",
+            menu=pystray.Menu(
+                pystray.MenuItem("Settings", settings_callback),
+                pystray.MenuItem("About", about_callback),
+                pystray.MenuItem("Quit", on_quit)
+            )
+        )
+        tray_icon_ready.set()  # Signal that icon is ready
+        tray_icon.run()
+    except Exception as e:
+        print(f"[ERROR] Tray app failed: {e}")
 
 def listen_hotkey(app):
     """
-    Starts a global hotkey listener for Alt+Shift+M using the keyboard package.
-    This approach is robust and suppresses the 'M' character in the terminal.
+    Start global hotkey listener using configurable hotkey from settings.
+    Uses pynput.keyboard for cross-platform support (no admin required).
+
     Args:
         app (QApplication): The running Qt application instance.
+
     Returns:
-        The keyboard module for later cleanup.
+        The keyboard listener instance for later cleanup.
     """
-    def on_hotkey():
+
+    def on_activate():
         handle_hotkey(app)
-    kb.add_hotkey('alt+shift+m', on_hotkey, suppress=True)
-    print("[INFO] Hotkey Alt+Shift+M registered (requires admin on Windows). Press Alt+Shift+M to activate.")
-    return kb
+
+    # Parse hotkey from settings (e.g., 'alt+shift+m' -> '<alt>+<shift>+m')
+    hotkey_str = settings.get('hotkey', 'alt+shift+m')
+
+    try:
+        # Convert 'alt+shift+m' to pynput format '<alt>+<shift>+m'
+        parsed_hotkey = keyboard.HotKey.parse(f'<{hotkey_str.replace("+", ">+<")}>')
+        print(f"[INFO] Hotkey '{hotkey_str}' registered (no admin required).")
+    except Exception as e:
+        print(f"[ERROR] Invalid hotkey '{hotkey_str}', using default 'alt+shift+m': {e}")
+        parsed_hotkey = keyboard.HotKey.parse('<alt>+<shift>+m')
+
+    h = keyboard.HotKey(parsed_hotkey, on_activate)
+
+    def for_canonical(f):
+        return lambda k: f(l.canonical(k))
+
+    l = keyboard.Listener(
+        on_press=for_canonical(h.press),
+        on_release=for_canonical(h.release)
+    )
+    l.start()
+    return l
 
 # --- Settings: Load/Save Logic ---
 SETTINGS_DIR = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'mac-converter-2')
 SETTINGS_PATH = os.path.join(SETTINGS_DIR, 'settings.json')
 DEFAULT_SETTINGS = {
     'autostart': False,
-    'default_format': 0,  # index in formats list
-    'timer': 8,  # seconds
-    'author': 'A. Lederman',
+    'last_format_index': 0,              # Track last used format (0-9)
+    'hotkey': 'alt+shift+m',             # Configurable hotkey
+    'notification_duration': 3,          # Notification display seconds
+    'author': 'Alejandro Lichtenfeld',   # Correct author name
     'license': 'MIT',
-    'about': 'MAC Address Converter Utility v2.0\nAuthor: A. Lederman\nLicense: MIT\nhttps://github.com/aleled/mac-converter-2'
+    'about': 'MAC Address Converter Utility v2.2.0\nAuthor: Alejandro Lichtenfeld\nLicense: MIT\nhttps://github.com/aleled/mac-converter-2'
 }
 
 def load_settings():
@@ -579,23 +372,48 @@ def main():
     """
     Main entry point. Starts the Qt application, tray icon, and hotkey listener. Runs the event loop.
     """
-    import time
     global listener
     app = QApplication(sys.argv)
+
+    # Start tray icon in background thread
     t = threading.Thread(target=tray_app, daemon=True)
     t.start()
+
+    # Wait for tray icon to be ready (max 5 seconds)
+    if not tray_icon_ready.wait(timeout=5):
+        print("[ERROR] Tray icon failed to initialize")
+        sys.exit(1)
+
+    # Start hotkey listener
     listener = listen_hotkey(app)
-    # Use a QTimer to poll for dialog requests
-    timer = QTimer()
-    timer.timeout.connect(show_format_selector_from_queue)
-    timer.start(100)
+
+    # Add QTimer for About dialog
+    def poll_about_dialog():
+        try:
+            about_dialog_request_queue.get_nowait()
+        except queue.Empty:
+            return
+        show_about_dialog()
+
+    about_timer = QTimer()
+    about_timer.timeout.connect(poll_about_dialog)
+    about_timer.start(200)
+
+    # Add QTimer for Settings dialog
+    def poll_settings_dialog():
+        try:
+            settings_dialog_request_queue.get_nowait()
+        except queue.Empty:
+            return
+        show_settings_dialog()
+
+    settings_timer = QTimer()
+    settings_timer.timeout.connect(poll_settings_dialog)
+    settings_timer.start(200)
+
     app.exec_()
     if listener:
-        listener.unhook_all_hotkeys()
-    # Do not call sys.exit(0) here; only exit on tray quit
+        listener.stop()
 
 if __name__ == "__main__":
     main()
-
-# Remove legacy/unused QTableWidget-based code below
-# (All code below this comment is now obsolete and removed)

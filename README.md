@@ -7,18 +7,25 @@
 
 # MAC Address Converter Utility
 
-A Windows system tray utility for converting MAC addresses between industry formats with a global hotkey and clipboard integration.
+> **NOTE:** As of v2.2.0, the app no longer requires administrator rights for global hotkey functionality. The hotkey system now uses pynput, which works without elevation. All future development must preserve this constraint: **the app must never require admin rights to run or register hotkeys.**
+
+A Windows system tray utility for converting MAC addresses between industry formats with a global hotkey, auto-cycling format selection, and clipboard integration.
 
 ## Features
 - System tray utility for Windows (and WSL/Linux) to convert and copy MAC addresses in multiple formats.
-- Global hotkey (Alt+Shift+M) to trigger the format selector dialog (requires admin on Windows).
-- Modern, robust, and visually clear UI/UX with keyboard and mouse navigation.
-- Info box always shows the original MAC address from the clipboard.
-- Persistent user preferences: autostart, default format, timer, about/credits/license info (settings stored in %APPDATA%/mac-converter-2/settings.json).
-- Settings dialog accessible from tray menu (change preferences: autostart, default format, timer, etc.).
+- Global hotkey (configurable, default Alt+Shift+M) to auto-cycle through MAC address formats (**no admin required**).
+- Auto-cycling: Each hotkey press converts to the next format (cycles through 10 formats: colon-separated, hyphen-separated, dot-separated, plain, in uppercase/lowercase variants).
+- Tray notifications showing converted MAC address (configurable duration, default 3 seconds).
+- Error notifications for invalid MAC addresses in clipboard.
+- Configurable hotkey: Change global hotkey via Settings dialog (e.g., alt+shift+m, ctrl+shift+c).
+- Configurable notification duration (1-10 seconds).
+- Persistent user preferences: autostart, hotkey, notification duration, about/credits/license info (settings stored in %APPDATA%/mac-converter-2/settings.json).
+- Settings dialog accessible from tray menu.
 - About dialog with app info, author, credits, and MIT license.
-- No debug output or legacy code; codebase is clean and production-ready.
-- Tray quit is clean and error-free.
+- Clean, production-ready codebase with no legacy dialog selector.
+
+## Design Constraints
+- **No admin rights required:** The app must never require administrator privileges to run or register hotkeys. All hotkey and tray functionality must work for standard users.
 
 ## Milestones
 - v2.1: Persistent user preferences, settings dialog, about dialog, robust error handling, and documentation polish.
@@ -26,12 +33,14 @@ A Windows system tray utility for converting MAC addresses between industry form
 
 ## Version
 
-Current version: 2.1.0 (feature branch)
+Current version: 2.2.0 (auto-cycling with notifications)
 
 ## Usage
-1. Run as administrator (Windows) for hotkey support.
+1. Run the app (no admin required).
 2. Copy a MAC address to clipboard.
-3. Press Alt+Shift+M to open the selector and copy the desired format.
+3. Press the configured hotkey (default Alt+Shift+M) to auto-convert to the next format.
+4. A tray notification shows the converted MAC address (auto-dismisses after configured duration).
+5. The converted MAC is automatically copied to clipboard, ready to paste immediately.
 
 ## Roadmap / TODO (as of 2025-06-04)
 - [ ] Implement persistent settings (hotkey, timeout, default MAC format) with both a config file (standardized location, e.g. %APPDATA%/mac-converter-2/settings.json) and a settings dialog accessible from the tray menu.
@@ -86,15 +95,13 @@ This will point your local repository to the correct remote on GitHub. After thi
 
 - When the app executes, it resides in memory and waits for the global hotkey.
 - When the hotkey is pressed, it reads the last entry from the clipboard.
-- If the clipboard content is not a valid MAC address, it copies "not a valid mac :-)" to the clipboard and keeps waiting for the next hotkey press.
-- If the clipboard content is a valid MAC address, it shows the user a window selector dialog.
-- When the selector window is displayed:
-  - The window is brought to the front and focused over any other window.
-  - A timer (default 6 seconds) starts ticking.
-  - If the user presses any key, the timer stops permanently.
-  - If the timer reaches 0, the window hides and the clipboard remains unchanged.
-  - The user can use the arrow keys (up, down, left, right), ESC, and ENTER to navigate, select, or exit.
-  - Once a value is selected, it is copied to the clipboard and the window hides (minimized back to the tray bar).
+- If the clipboard content is not a valid MAC address, a tray notification displays "No valid MAC address in clipboard" for the configured duration (default 3 seconds), and the app resumes waiting for the next hotkey press.
+- If the clipboard content is a valid MAC address:
+  - The app auto-cycles to the next format (index 0→1→2→...→9→0).
+  - The converted MAC address is copied to the clipboard.
+  - A tray notification displays the converted MAC address for the configured duration.
+  - The user can immediately paste the converted MAC address.
+  - Each subsequent hotkey press cycles to the next format in the sequence.
 
 ## Debugging and UI/UX Improvements (2025-06-05)
 - Selector dialog navigation and highlight logic are robust and debugged.
@@ -118,3 +125,62 @@ This will point your local repository to the correct remote on GitHub. After thi
 6. Every window should have common control buttons like Close, Minimize, etc.
 
 See also: TODO.md and DEVELOPMENT_LOG.md for implementation notes.
+
+## UI/UX Design Guidelines for MAC Address Formatter App
+
+### Layout and Appearance
+
+```
++-----------------------------------------------------------+
+| icon  MAC Address Formatter App                  [_] [X]  |
++-----------------------------------------------------------+
+| Select the MAC address format to copy to clipboard        |
++-----------------------------------------------------------+
+| [column 1]       | [column 2]         | [column 3]        |
+| FORMAT STYLE     | LOWER CASE         | UPPER CASE        |
+|------------------+--------------------+-------------------|
+| Colon-separated  | aa:bb:cc:dd:ee:ff  | AA:BB:CC:DD:EE:FF |
+| Hyphen-separated | aa-bb-cc-dd-ee-ff  | AA-BB-CC-DD-EE-FF |
+| Dot-separated    | aabb.ccdd.eeff     | AABB.CCDD.EEFF    |
+| Plain            | aabbccddeeff       | AABBCCDDEEFF      |
++-----------------------------------------------------------+
+
+INFORMATION:
+| [label] [information                   ] |
+
+Controls:
+
+[ Arrow Keys  ] [ Navigate Up/Down/Left/Right ]
+[ Esc / Enter ] [ Cancel Selection / Confirm  ]
+[ Tab         ] [ Switch Between Fields       ]
+
+
+- column1 - width for entire column and row should be the same, min width as largest string in that row.
+- column2 - width for entire column and row should be the same, min width as largest string in that row.
+- column3 - width for entire column and row should be the same, min width as largest string in that row.
+
+```
+
+### Color and Theme Guidelines
+- **Background:** Deep dark gray (`#23272e`), with lighter dark for info areas (`#181a20`).
+- **Headers/Labels:** Orange (`#ffb347`) for section headers and format names.
+- **Highlight:** Green (`#39d353`) for the selected cell background, with purple (`#b266ff`) text.
+- **Text:** White (`#fff`) for normal text, purple (`#b266ff`) for info and highlights.
+- **Borders:** Subtle gray (`#444`) for cell and header separators.
+- **Font:** Use monospace (Consolas) for MAC addresses, bold for headers.
+
+### UX Guidelines
+- All headers and cells are left-aligned for clarity.
+- Consistent cell and header widths for perfect column alignment.
+- Info/instructions always visible at the top.
+- Keyboard and mouse navigation supported.
+- Dialog always appears on top and receives focus.
+- Controls and instructions are always visible and clear.
+
+### Controls
+- **Arrow Keys:** Navigate between cells.
+- **Enter/Click:** Copy selected MAC format to clipboard.
+- **Esc:** Cancel/close dialog.
+- **Tab:** Switch between fields (future: for accessibility).
+
+> **Maintain these guidelines for all future UI/UX iterations.**
