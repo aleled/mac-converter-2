@@ -17,6 +17,8 @@ class TestMacFormats(unittest.TestCase):
         self.assertEqual(normalize_mac("00:1A:2B:3C:4D:5E"), "001A2B3C4D5E")
         self.assertEqual(normalize_mac("00-1a-2b-3c-4d-5e"), "001a2b3c4d5e")
         self.assertEqual(normalize_mac("001A.2B3C.4D5E"), "001A2B3C4D5E")
+        self.assertEqual(normalize_mac("001A2B-3C4D5E"), "001A2B3C4D5E")
+        self.assertEqual(normalize_mac("001a2b-3c4d5e"), "001a2b3c4d5e")
         self.assertEqual(normalize_mac("001a2b3c4d5e"), "001a2b3c4d5e")
         self.assertIsNone(detect_mac("not a mac"))
         # Only accept exact MAC, not substring
@@ -30,6 +32,8 @@ class TestMacFormats(unittest.TestCase):
         self.assertEqual(formats["Colon-separated lowercase"], "00:1a:2b:3c:4d:5e")
         self.assertEqual(formats["Hyphen-separated uppercase"], "00-1A-2B-3C-4D-5E")
         self.assertEqual(formats["Hyphen-separated lowercase"], "00-1a-2b-3c-4d-5e")
+        self.assertEqual(formats["Hyphen-6char uppercase"], "001A2B-3C4D5E")
+        self.assertEqual(formats["Hyphen-6char lowercase"], "001a2b-3c4d5e")
         self.assertEqual(formats["Dot-separated uppercase"], "001A.2B3C.4D5E")
         self.assertEqual(formats["Dot-separated lowercase"], "001a.2b3c.4d5e")
         self.assertEqual(formats["Plain uppercase"], "001A2B3C4D5E")
@@ -41,10 +45,12 @@ class TestMacFormats(unittest.TestCase):
         valid = [
             "00:1A:2B:3C:4D:5E",
             "00-1A-2B-3C-4D-5E",
+            "001A2B-3C4D5E",
             "001A.2B3C.4D5E",
             "001A2B3C4D5E",
             "00:1a:2b:3c:4d:5e",
             "00-1a-2b-3c-4d-5e",
+            "001a2b-3c4d5e",
             "001a.2b3c.4d5e",
             "001a2b3c4d5e"
         ]

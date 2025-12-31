@@ -1,3 +1,5 @@
+# NOTE: For future development, always update this file whenever new libraries are added, removed, or replaced. Ensure all dependencies are listed and up to date for legal and functional compliance.
+
 # Python requirements for MAC Address Converter
 pystray
 Pillow
@@ -7,3 +9,4 @@ PyInstaller
 pynput
 PyQt5
 PyQt5
+pywin32

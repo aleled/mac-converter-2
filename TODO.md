@@ -113,6 +113,16 @@ Add new tasks below as needed.
 - [ ] Optional: Add user preferences (autostart, default format, etc.)
 - [ ] Gather user feedback for future improvements
 
+## UI/UX Design Checklist
+
+- [ ] All headers and cells left-aligned
+- [ ] Consistent column widths and padding
+- [ ] Color palette: dark background, orange headers, green highlight, purple info
+- [ ] Info/instructions always visible at top
+- [ ] Controls: Arrow keys, Enter, Esc, Tab
+- [ ] Dialog always on top and focused
+- [ ] See README.md for full UI/UX guidelines and diagram
+
 ## UI/UX and Window Management Guidelines
 
 - The hotkey opens the main window.
@@ -121,3 +131,6 @@ Add new tasks below as needed.
 - Hotkey must not interfere with any other app element or block execution.
 - If a tray menu window is open, no other window can be opened until it is closed.
 - All windows must have standard controls (close, minimize, etc).
+
+## Design Constraints
+- The app must never require administrator rights to run or register hotkeys. All features must work for standard users. Hotkey system uses pynput (no elevation required).

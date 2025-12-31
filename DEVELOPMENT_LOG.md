@@ -143,4 +143,21 @@
 
 ---
 
+## 2025-06-07 (Windows/PowerShell Session) - Hotkey Admin Rights Removed
+- Replaced keyboard package (required admin) with pynput for global hotkey registration.
+- App no longer requires administrator rights for hotkey functionality.
+- Updated all documentation and code to reflect this permanent design constraint: **the app must never require admin rights to run or register hotkeys**.
+
+---
+
+## 2025-06-07: UI/UX Baseline Established
+
+- Dialog layout, color palette, and controls are now documented in README.md.
+- All headers/cells left-aligned, consistent widths, modern dark theme.
+- Controls and info/instructions always visible.
+- See README.md for ASCII diagram and color/UX notes.
+- Maintain this as the baseline for all future UI/UX changes.
+
+---
+
 Each session will be logged here with a summary of work done, pending tasks, and next steps.

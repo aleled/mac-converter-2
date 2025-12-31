@@ -15,6 +15,8 @@ MAC_FORMATS = [
     ("Colon-separated lowercase",    lambda mac: ':'.join(mac[i:i+2] for i in range(0, 12, 2)).lower()),
     ("Hyphen-separated uppercase",   lambda mac: '-'.join(mac[i:i+2] for i in range(0, 12, 2)).upper()),
     ("Hyphen-separated lowercase",   lambda mac: '-'.join(mac[i:i+2] for i in range(0, 12, 2)).lower()),
+    ("Hyphen-6char uppercase",       lambda mac: f"{mac[:6].upper()}-{mac[6:].upper()}"),
+    ("Hyphen-6char lowercase",       lambda mac: f"{mac[:6].lower()}-{mac[6:].lower()}"),
     ("Dot-separated uppercase",      lambda mac: '.'.join(mac[i:i+4] for i in range(0, 12, 4)).upper()),
     ("Dot-separated lowercase",      lambda mac: '.'.join(mac[i:i+4] for i in range(0, 12, 4)).lower()),
     ("Plain uppercase",              lambda mac: mac.upper()),
@@ -22,7 +24,7 @@ MAC_FORMATS = [
 ]
 
 # Regex to match MAC addresses in various formats (strict, must be delimited or at string boundaries)
-MAC_REGEX = re.compile(r"(?<![0-9A-Fa-f])((?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}|[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}|[0-9A-Fa-f]{12})(?![0-9A-Fa-f])")
+MAC_REGEX = re.compile(r"(?<![0-9A-Fa-f])((?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}|[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}-[0-9A-Fa-f]{6}|[0-9A-Fa-f]{12})(?![0-9A-Fa-f])")
 
 def normalize_mac(mac: str) -> str:
     """Remove all separators and return 12 hex digits (no case change)."""
