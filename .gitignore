@@ -51,3 +51,16 @@ Thumbs.db
 venv/
 ENV/
 env/
+
+# Build and installer outputs
+installer-output/
+*.exe
+build/
+dist/
+
+# IDE and temporary files
+.claude/
+.vscode/
+.ondriveignore
+*.log
+BUGFIX_SUMMARY.md
