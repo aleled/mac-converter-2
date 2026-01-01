@@ -160,4 +160,57 @@
 
 ---
 
+---
+
+## 2025-12-31: v2.2.0 Production Release with Windows Installer
+
+### Session Summary
+- Created professional Windows installer for MAC Converter v2.2.0 using PyInstaller and Inno Setup
+- Updated installer script version from 2.1.0 to 2.2.0
+- Built standalone executable: `dist/MAC-Converter.exe` (55 MB)
+- Generated installer: `installer-output/MAC-Converter-Setup-v2.2.0.exe` (58 MB)
+
+### Installer Features
+- Professional Inno Setup wizard-style installation
+- Default install location: `C:\Program Files\MAC-Converter`
+- Optional desktop shortcut (unchecked by default)
+- Optional Windows startup entry (unchecked by default)
+- Includes README.md and LICENSE.txt
+- Uninstaller with option to remove user settings from `%APPDATA%\mac-converter-2`
+- No admin rights required for installation or runtime
+- Automatic app launch after installation (optional)
+
+### Build Process
+1. Updated `installer.iss` version from 2.1.0 to 2.2.0
+2. Built executable with PyInstaller using `mac-converter.spec`
+   - Entry point: `clipboard_hotkey.py`
+   - Includes: `icon-v1.png`, `pynput` hidden imports
+   - Output: 55 MB standalone executable
+3. Built installer with Inno Setup (v6.5.4)
+   - Compressed all files (executable, icon, docs)
+   - Created digital signature metadata
+   - Final installer: 58 MB
+
+### Application Readiness Verification
+- ✅ Auto-cycling MAC format converter (0→1→2→...→9→0)
+- ✅ Configurable global hotkey (default alt+shift+m)
+- ✅ Tray notifications with configurable duration
+- ✅ Settings dialog with dark theme and grouped options
+- ✅ About dialog with app info and clickable GitHub link
+- ✅ No admin rights required (uses pynput, not admin-dependent keyboard lib)
+- ✅ Settings persistence in %APPDATA%\mac-converter-2\settings.json
+
+### Release Artifacts
+- **Installer**: `installer-output/MAC-Converter-Setup-v2.2.0.exe`
+- **Standalone Executable**: `dist/MAC-Converter.exe`
+- **Source**: Latest code in `clipboard_hotkey.py` with dark theme UI enhancements
+
+### Next Steps for Future Sessions
+- Deploy installer to GitHub releases page
+- Create user installation guide
+- Monitor feedback from end users
+- Plan v2.3.0 features (if applicable)
+
+---
+
 Each session will be logged here with a summary of work done, pending tasks, and next steps.
