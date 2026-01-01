@@ -23,9 +23,9 @@ import sys
 from mac_formats import detect_mac, convert_mac
 import platform
 import os
-from PyQt5.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QHBoxLayout, QWidget, QSizePolicy, QCheckBox, QPushButton, QLineEdit, QSpinBox
+from PyQt5.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QHBoxLayout, QWidget, QSizePolicy, QCheckBox, QPushButton, QLineEdit, QSpinBox, QGroupBox
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QColor, QIcon, QBrush
+from PyQt5.QtGui import QFont, QColor, QIcon, QBrush, QPixmap
 from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QCursor
 import queue
@@ -221,83 +221,289 @@ def handle_hotkey(app):
     })
 
 # --- About Dialog ---
+class AboutDialog(QDialog):
+    """About dialog with app information, author, license, and links."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("About MAC Converter")
+        self.setModal(True)
+
+        # Set window icon
+        try:
+            icon_path = get_icon_path()
+            self.setWindowIcon(QIcon(icon_path))
+        except:
+            pass
+
+        # Apply dark theme stylesheet
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #2b2b2b;
+                color: #ffffff;
+            }
+            QLabel {
+                color: #e0e0e0;
+            }
+            QPushButton {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 24px;
+                font-size: 10pt;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1084d8;
+            }
+        """)
+
+        layout = QVBoxLayout()
+        layout.setSpacing(15)
+        layout.setContentsMargins(30, 30, 30, 30)
+
+        # Icon at top (larger, centered)
+        try:
+            icon_path = get_icon_path()
+            pixmap = QPixmap(icon_path)
+            scaled_pixmap = pixmap.scaled(96, 96, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            icon_label = QLabel()
+            icon_label.setPixmap(scaled_pixmap)
+            icon_label.setAlignment(Qt.AlignCenter)
+            layout.addWidget(icon_label)
+        except:
+            pass
+
+        # App name
+        app_name = QLabel("MAC Address Converter")
+        app_name.setAlignment(Qt.AlignCenter)
+        app_font = QFont()
+        app_font.setPointSize(18)
+        app_font.setBold(True)
+        app_name.setFont(app_font)
+        layout.addWidget(app_name)
+
+        # Version
+        version_label = QLabel("Version 2.2.0")
+        version_label.setAlignment(Qt.AlignCenter)
+        version_label.setStyleSheet("color: #999999; font-size: 11pt;")
+        layout.addWidget(version_label)
+
+        # Separator
+        separator = QLabel()
+        separator.setFixedHeight(1)
+        separator.setStyleSheet("background-color: #555555;")
+        layout.addWidget(separator)
+
+        # Author
+        author_label = QLabel("Created by Alejandro Lichtenfeld")
+        author_label.setAlignment(Qt.AlignCenter)
+        author_label.setStyleSheet("font-size: 11pt;")
+        layout.addWidget(author_label)
+
+        # Year
+        year_label = QLabel("© 2026")
+        year_label.setAlignment(Qt.AlignCenter)
+        year_label.setStyleSheet("color: #999999; font-size: 10pt;")
+        layout.addWidget(year_label)
+
+        # License
+        license_label = QLabel("Licensed under MIT License")
+        license_label.setAlignment(Qt.AlignCenter)
+        license_label.setStyleSheet("color: #999999; font-size: 10pt;")
+        layout.addWidget(license_label)
+
+        # GitHub link (clickable)
+        github_label = QLabel('<a href="https://github.com/aleled/mac-converter-2" style="color: #0078d4;">View on GitHub</a>')
+        github_label.setOpenExternalLinks(True)
+        github_label.setAlignment(Qt.AlignCenter)
+        github_label.setStyleSheet("font-size: 10pt;")
+        layout.addWidget(github_label)
+
+        layout.addSpacing(10)
+
+        # Close button
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(self.accept)
+        close_button.setFixedWidth(120)
+
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(close_button)
+        button_layout.addStretch()
+        layout.addLayout(button_layout)
+
+        self.setLayout(layout)
+        self.setFixedSize(450, 500)
+
+
 def show_about_dialog():
-    """
-    Shows a modal About dialog that blocks all other app windows until closed. No timer, no auto-close.
-    """
-    from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
-    from PyQt5.QtCore import Qt
-    app = QApplication.instance()
-    dlg = QDialog(None)
-    dlg.setWindowTitle("About MAC Address Converter")
-    modality = getattr(Qt, 'WindowModal', None)
-    if modality is not None:
-        dlg.setWindowModality(modality)
-    stays_on_top = getattr(Qt, 'WindowStaysOnTopHint', None)
-    if stays_on_top is not None:
-        dlg.setWindowFlags(dlg.windowFlags() | stays_on_top)
-    layout = QVBoxLayout()
-    label = QLabel(settings['about'])
-    label.setWordWrap(True)
-    layout.addWidget(label)
-    btn = QPushButton("OK")
-    btn.clicked.connect(lambda: dlg.done(0))  # Use done(0) to close immediately
-    layout.addWidget(btn)
-    dlg.setLayout(layout)
-    dlg.setFixedWidth(400)
-    dlg.exec_()  # Modal: blocks until closed
+    """Show About dialog in main Qt thread."""
+    dlg = AboutDialog()
+    dlg.exec_()
 
 # --- Settings Dialog ---
 class SettingsDialog(QDialog):
-    """Settings dialog for configuring hotkey and notification preferences."""
+    """Settings dialog with dark theme, organized sections, and app icon."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("MAC Converter - Settings")
         self.setModal(True)
+
+        # Set window icon
         try:
-            stays_on_top = getattr(Qt, 'WindowStaysOnTopHint', None)
-            if stays_on_top is not None:
-                self.setWindowFlags(self.windowFlags() | stays_on_top)
-        except Exception:
+            icon_path = get_icon_path()
+            self.setWindowIcon(QIcon(icon_path))
+        except:
             pass
 
-        layout = QVBoxLayout()
+        # Apply dark theme stylesheet
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #2b2b2b;
+                color: #ffffff;
+            }
+            QLabel {
+                color: #e0e0e0;
+                font-size: 11pt;
+            }
+            QLineEdit, QSpinBox {
+                background-color: #3c3c3c;
+                color: #ffffff;
+                border: 1px solid #555555;
+                border-radius: 4px;
+                padding: 6px;
+                font-size: 10pt;
+            }
+            QLineEdit:focus, QSpinBox:focus {
+                border: 1px solid #0078d4;
+            }
+            QCheckBox {
+                color: #e0e0e0;
+                font-size: 10pt;
+            }
+            QPushButton {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 16px;
+                font-size: 10pt;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1084d8;
+            }
+            QPushButton#cancel {
+                background-color: #555555;
+            }
+            QPushButton#cancel:hover {
+                background-color: #666666;
+            }
+            QGroupBox {
+                color: #ffffff;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                margin-top: 12px;
+                font-weight: bold;
+                font-size: 11pt;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+            }
+        """)
 
-        # Hotkey setting
+        main_layout = QVBoxLayout()
+        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+
+        # Header with icon and title
+        header_layout = QHBoxLayout()
+        try:
+            icon_path = get_icon_path()
+            pixmap = QPixmap(icon_path)
+            scaled_pixmap = pixmap.scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            icon_label = QLabel()
+            icon_label.setPixmap(scaled_pixmap)
+            header_layout.addWidget(icon_label)
+        except:
+            pass
+
+        header_text = QLabel("Settings")
+        header_font = QFont()
+        header_font.setPointSize(16)
+        header_font.setBold(True)
+        header_text.setFont(header_font)
+        header_layout.addWidget(header_text)
+        header_layout.addStretch()
+        main_layout.addLayout(header_layout)
+
+        # Hotkey Configuration Group
+        hotkey_group = QGroupBox("Hotkey Configuration")
+        hotkey_layout = QVBoxLayout()
+
         hotkey_label = QLabel("Global Hotkey:")
         self.hotkey_input = QLineEdit()
         self.hotkey_input.setText(settings.get('hotkey', 'alt+shift+m'))
         self.hotkey_input.setPlaceholderText("e.g., alt+shift+m, ctrl+shift+c")
 
-        # Notification duration setting
-        duration_label = QLabel("Notification Duration (seconds):")
+        hotkey_hint = QLabel("Note: Hotkey change requires app restart")
+        hotkey_hint.setStyleSheet("color: #999999; font-size: 9pt; font-style: italic;")
+
+        hotkey_layout.addWidget(hotkey_label)
+        hotkey_layout.addWidget(self.hotkey_input)
+        hotkey_layout.addWidget(hotkey_hint)
+        hotkey_group.setLayout(hotkey_layout)
+        main_layout.addWidget(hotkey_group)
+
+        # Notification Preferences Group
+        notification_group = QGroupBox("Notification Preferences")
+        notification_layout = QVBoxLayout()
+
+        duration_label = QLabel("Popup Duration (seconds):")
         self.duration_spinbox = QSpinBox()
         self.duration_spinbox.setRange(1, 10)
         self.duration_spinbox.setValue(settings.get('notification_duration', 3))
 
-        # Autostart setting
+        notification_layout.addWidget(duration_label)
+        notification_layout.addWidget(self.duration_spinbox)
+        notification_group.setLayout(notification_layout)
+        main_layout.addWidget(notification_group)
+
+        # Startup Options Group
+        startup_group = QGroupBox("Startup Options")
+        startup_layout = QVBoxLayout()
+
         self.autostart_checkbox = QCheckBox("Start with Windows")
         self.autostart_checkbox.setChecked(settings.get('autostart', False))
 
+        startup_layout.addWidget(self.autostart_checkbox)
+        startup_group.setLayout(startup_layout)
+        main_layout.addWidget(startup_group)
+
+        main_layout.addStretch()
+
         # Buttons
         button_layout = QHBoxLayout()
-        save_button = QPushButton("Save")
+        button_layout.addStretch()
+
         cancel_button = QPushButton("Cancel")
-        save_button.clicked.connect(self.save_settings)
+        cancel_button.setObjectName("cancel")
         cancel_button.clicked.connect(self.reject)
-        button_layout.addWidget(save_button)
+
+        save_button = QPushButton("Save")
+        save_button.clicked.connect(self.save_settings)
+
         button_layout.addWidget(cancel_button)
+        button_layout.addWidget(save_button)
+        main_layout.addLayout(button_layout)
 
-        # Add all to layout
-        layout.addWidget(hotkey_label)
-        layout.addWidget(self.hotkey_input)
-        layout.addWidget(duration_label)
-        layout.addWidget(self.duration_spinbox)
-        layout.addWidget(self.autostart_checkbox)
-        layout.addLayout(button_layout)
-
-        self.setLayout(layout)
+        self.setLayout(main_layout)
+        self.setFixedWidth(500)
 
     def save_settings(self):
         """Save settings and close dialog."""
@@ -306,9 +512,6 @@ class SettingsDialog(QDialog):
         settings['autostart'] = self.autostart_checkbox.isChecked()
         save_settings(settings)
         self.accept()
-
-        # Note: Hotkey change requires app restart
-        # Could show a message box here to notify user
 
 def show_settings_dialog():
     """Show settings dialog in main Qt thread."""
@@ -348,6 +551,34 @@ class FormatSelectorPopup(QDialog):
         layout = QVBoxLayout()
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(8)
+
+        # Header with icon (new)
+        header_layout = QHBoxLayout()
+        try:
+            icon_path = get_icon_path()
+            pixmap = QPixmap(icon_path)
+            scaled_pixmap = pixmap.scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            icon_label = QLabel()
+            icon_label.setPixmap(scaled_pixmap)
+            header_layout.addWidget(icon_label)
+        except:
+            pass  # Icon not found, just skip
+
+        header_title = QLabel("MAC Converter")
+        header_font = header_title.font()
+        header_font.setBold(True)
+        header_font.setPointSize(12)
+        header_title.setFont(header_font)
+        header_layout.addWidget(header_title)
+        header_layout.addStretch()
+
+        layout.addLayout(header_layout)
+
+        # Separator after header
+        separator_header = QLabel()
+        separator_header.setStyleSheet("border-bottom: 1px solid #cccccc;")
+        separator_header.setFixedHeight(6)
+        layout.addWidget(separator_header)
 
         # Current format (bold)
         current_format_name = formats[current_index][0]
