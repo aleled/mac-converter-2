@@ -27,6 +27,7 @@ from PyQt5.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QHBoxLay
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QColor, QIcon, QBrush
 from PyQt5.QtCore import QTimer
+from PyQt5.QtGui import QCursor
 import queue
 import ctypes
 import time
@@ -93,67 +94,102 @@ listener = None
 # Global notification timer management - allows cancelling previous notification
 current_notification_timer = None
 
-# --- Helper function for notifications with custom duration ---
-def show_notification_with_duration(icon, message, title, duration_seconds):
+# Global format popup instance tracker - allows instant replacement
+current_format_popup = None
+
+# --- Format popup display function ---
+def show_format_popup(app, formats, current_index, duration_seconds):
     """
-    Show notification and auto-remove after specified duration.
-    Cancels any previous notification timer to allow immediate updates.
+    Show format selector popup with current format in bold.
+    Replaces any existing popup instantly for responsive UX.
 
     Args:
-        icon (pystray.Icon): The tray icon instance.
-        message (str): The notification message (usually the MAC address).
-        title (str): The notification title.
-        duration_seconds (int): How long to display the notification in seconds.
+        app (QApplication): The running Qt application instance.
+        formats (list): List of (name, value) tuples for all MAC formats.
+        current_index (int): Index of the currently selected format.
+        duration_seconds (int): How long to display the popup (in seconds).
     """
-    global current_notification_timer
+    global current_format_popup
 
-    if not icon:
-        return
-
-    # Cancel previous notification timer if one is active
-    if current_notification_timer is not None:
-        current_notification_timer.cancel()
+    # Close and clean up previous popup if exists
+    if current_format_popup is not None:
         try:
-            icon.remove_notification()
+            current_format_popup.close()
         except:
-            pass  # Ignore errors if notification already dismissed
+            pass
+        current_format_popup = None
 
-    icon.notify(message, title)
+    # Create and show new popup
+    current_format_popup = FormatSelectorPopup(formats, current_index, duration_seconds)
+    current_format_popup.show()
 
-    # Auto-remove after duration using threading.Timer
-    def remove():
-        try:
-            icon.remove_notification()
-        except:
-            pass  # Ignore errors if notification already dismissed
 
-    current_notification_timer = threading.Timer(duration_seconds, remove)
-    current_notification_timer.daemon = True
-    current_notification_timer.start()
+def show_error_popup(app, message, duration_seconds):
+    """
+    Show error message popup.
+
+    Args:
+        app (QApplication): The running Qt application instance.
+        message (str): The error message to display.
+        duration_seconds (int): How long to display the popup (in seconds).
+    """
+    dlg = QDialog(None)
+    dlg.setWindowTitle("MAC Converter")
+    try:
+        icon_path = get_icon_path()
+        dlg.setWindowIcon(QIcon(icon_path))
+    except:
+        pass
+
+    dlg.setWindowFlags(dlg.windowFlags() | Qt.WindowStaysOnTopHint | Qt.Tool)
+
+    layout = QVBoxLayout()
+    layout.setContentsMargins(15, 15, 15, 15)
+
+    label = QLabel(message)
+    label.setStyleSheet("color: #d32f2f; font-weight: bold;")
+    layout.addWidget(label)
+
+    dlg.setLayout(layout)
+    dlg.setFixedWidth(300)
+    dlg.adjustSize()
+
+    # Position near system tray
+    try:
+        screen_geom = QApplication.desktop().screenGeometry()
+        x = screen_geom.width() - dlg.width() - 20
+        y = screen_geom.height() - dlg.height() - 20
+        dlg.move(x, y)
+    except:
+        pass
+
+    # Auto-close timer
+    timer = QTimer()
+    timer.setSingleShot(True)
+    timer.timeout.connect(dlg.close)
+    timer.start(int(duration_seconds * 1000))
+
+    dlg.show()
 
 def handle_hotkey(app):
     """
-    Handle hotkey press: auto-cycle MAC format and show notification.
-    Uses global tray_icon variable to display notifications.
+    Handle hotkey press: auto-cycle MAC format and show format selector popup.
+    Displays current format in bold with clickable options for other formats.
 
     Args:
         app (QApplication): The running Qt application instance.
     """
-    global tray_icon
-
     text = pyperclip.paste()
     mac = detect_mac(text)
 
     if not mac:
-        # Show error notification
-        if tray_icon:
-            duration = settings.get('notification_duration', 3)
-            show_notification_with_duration(
-                tray_icon,
-                "No valid MAC address in clipboard",
-                "MAC Converter",
-                duration
-            )
+        # Show error popup
+        duration = settings.get('notification_duration', 3)
+        show_error_popup(
+            app,
+            "No valid MAC address in clipboard",
+            duration
+        )
         return
 
     # Get all formats
@@ -173,15 +209,9 @@ def handle_hotkey(app):
     settings['last_format_index'] = next_idx
     save_settings(settings)
 
-    # Show success notification with just the MAC address
-    if tray_icon:
-        duration = settings.get('notification_duration', 3)
-        show_notification_with_duration(
-            tray_icon,
-            converted_mac,
-            "MAC Converter",
-            duration
-        )
+    # Show format selector popup with current format highlighted
+    duration = settings.get('notification_duration', 3)
+    show_format_popup(app, formats, next_idx, duration)
 
 # --- About Dialog ---
 def show_about_dialog():
@@ -277,6 +307,153 @@ def show_settings_dialog():
     """Show settings dialog in main Qt thread."""
     dlg = SettingsDialog()
     dlg.exec_()
+
+# --- Format Selector Popup ---
+class FormatSelectorPopup(QDialog):
+    """
+    Non-modal popup that displays MAC address formats.
+    Shows current format in bold with all available formats clickable.
+    Auto-closes after configured duration or when user clicks a format.
+    """
+
+    def __init__(self, formats, current_index, duration_seconds):
+        super().__init__(None)
+        self.formats = formats
+        self.current_index = current_index
+        self.duration_seconds = duration_seconds
+
+        # Window setup
+        self.setWindowTitle("MAC Converter")
+        try:
+            icon_path = get_icon_path()
+            self.setWindowIcon(QIcon(icon_path))
+        except:
+            pass  # Ignore if icon not found
+
+        # Window flags: always on top, tool window, no frame
+        self.setWindowFlags(
+            self.windowFlags() |
+            Qt.WindowStaysOnTopHint |
+            Qt.Tool
+        )
+
+        # Layout
+        layout = QVBoxLayout()
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(8)
+
+        # Current format (bold)
+        current_format_name = formats[current_index][0]
+        current_format_value = formats[current_index][1]
+
+        current_label = QLabel(f"{current_format_name}:")
+        current_font = current_label.font()
+        current_font.setBold(True)
+        current_font.setPointSize(12)
+        current_label.setFont(current_font)
+        layout.addWidget(current_label)
+
+        mac_label = QLabel(current_format_value)
+        mac_font = mac_label.font()
+        mac_font.setBold(True)
+        mac_font.setPointSize(11)
+        mac_font.setFamily("Courier New")
+        mac_label.setFont(mac_font)
+        layout.addWidget(mac_label)
+
+        # Separator
+        separator = QLabel("-" * 40)
+        separator.setStyleSheet("color: #cccccc;")
+        layout.addWidget(separator)
+
+        # Other formats
+        other_label = QLabel("Click any format to copy:")
+        other_font = other_label.font()
+        other_font.setPointSize(9)
+        other_label.setFont(other_font)
+        other_label.setStyleSheet("color: #666666;")
+        layout.addWidget(other_label)
+
+        # Add all other formats as clickable labels
+        for i, (fmt_name, fmt_value) in enumerate(formats):
+            if i != current_index:
+                # Create clickable format label
+                fmt_label = QLabel(f"{fmt_name}\n{fmt_value}")
+                fmt_label.setCursor(Qt.PointingHandCursor)
+                fmt_label.setStyleSheet("""
+                    QLabel {
+                        padding: 6px;
+                        background-color: #f5f5f5;
+                        border-radius: 4px;
+                        color: #333333;
+                    }
+                    QLabel:hover {
+                        background-color: #e8e8e8;
+                        text-decoration: underline;
+                    }
+                """)
+
+                # Store MAC value for click handler
+                fmt_label.mac_value = fmt_value
+                fmt_label.mac_index = i
+
+                # Connect click event
+                fmt_label.mousePressEvent = lambda event, label=fmt_label: self.on_format_clicked(label)
+
+                layout.addWidget(fmt_label)
+
+        layout.addStretch()
+        self.setLayout(layout)
+
+        # Auto-close timer
+        self.auto_close_timer = QTimer()
+        self.auto_close_timer.setSingleShot(True)
+        self.auto_close_timer.timeout.connect(self.close)
+        self.auto_close_timer.start(int(duration_seconds * 1000))
+
+        # Set window size
+        self.setFixedWidth(350)
+        self.adjustSize()
+
+        # Position near bottom-right (near system tray)
+        self.position_near_tray()
+
+    def position_near_tray(self):
+        """Position the popup near the system tray (bottom-right corner)."""
+        try:
+            screen_geom = QApplication.desktop().screenGeometry()
+            screen_width = screen_geom.width()
+            screen_height = screen_geom.height()
+
+            # Margin from corner
+            margin = 20
+
+            # Position: bottom-right with margins
+            x = screen_width - self.width() - margin
+            y = screen_height - self.height() - margin
+
+            self.move(x, y)
+        except:
+            # Fallback: center on screen
+            self.move(QApplication.desktop().screen().rect().center() - self.rect().center())
+
+    def on_format_clicked(self, label):
+        """Handle format click: copy to clipboard and close."""
+        # Copy to clipboard
+        pyperclip.copy(label.mac_value)
+
+        # Update settings with new format index
+        settings['last_format_index'] = label.mac_index
+        save_settings(settings)
+
+        # Close popup
+        self.close()
+
+    def closeEvent(self, event):
+        """Stop timer when closing."""
+        if hasattr(self, 'auto_close_timer'):
+            self.auto_close_timer.stop()
+        super().closeEvent(event)
 
 # --- Tray Menu ---
 def tray_app():
