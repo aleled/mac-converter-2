@@ -83,6 +83,7 @@ def on_quit(icon, item):
 exit_event = threading.Event()
 about_dialog_request_queue = queue.Queue()
 settings_dialog_request_queue = queue.Queue()
+format_popup_request_queue = queue.Queue()  # Queue for format popup requests
 
 # Global icon reference for notifications
 tray_icon = None
@@ -173,8 +174,9 @@ def show_error_popup(app, message, duration_seconds):
 
 def handle_hotkey(app):
     """
-    Handle hotkey press: auto-cycle MAC format and show format selector popup.
+    Handle hotkey press: auto-cycle MAC format and queue format selector popup.
     Displays current format in bold with clickable options for other formats.
+    Uses queue to pass request to Qt event loop (thread-safe).
 
     Args:
         app (QApplication): The running Qt application instance.
@@ -183,13 +185,13 @@ def handle_hotkey(app):
     mac = detect_mac(text)
 
     if not mac:
-        # Show error popup
+        # Queue error popup request
         duration = settings.get('notification_duration', 3)
-        show_error_popup(
-            app,
-            "No valid MAC address in clipboard",
-            duration
-        )
+        format_popup_request_queue.put({
+            'type': 'error',
+            'message': "No valid MAC address in clipboard",
+            'duration': duration
+        })
         return
 
     # Get all formats
@@ -209,9 +211,14 @@ def handle_hotkey(app):
     settings['last_format_index'] = next_idx
     save_settings(settings)
 
-    # Show format selector popup with current format highlighted
+    # Queue format selector popup request (thread-safe)
     duration = settings.get('notification_duration', 3)
-    show_format_popup(app, formats, next_idx, duration)
+    format_popup_request_queue.put({
+        'type': 'format',
+        'formats': formats,
+        'current_index': next_idx,
+        'duration': duration
+    })
 
 # --- About Dialog ---
 def show_about_dialog():
@@ -621,6 +628,31 @@ def main():
     settings_timer = QTimer()
     settings_timer.timeout.connect(poll_settings_dialog)
     settings_timer.start(200)
+
+    # Add QTimer for Format Popup
+    def poll_format_popup():
+        try:
+            request = format_popup_request_queue.get_nowait()
+        except queue.Empty:
+            return
+
+        if request['type'] == 'format':
+            show_format_popup(
+                app,
+                request['formats'],
+                request['current_index'],
+                request['duration']
+            )
+        elif request['type'] == 'error':
+            show_error_popup(
+                app,
+                request['message'],
+                request['duration']
+            )
+
+    format_timer = QTimer()
+    format_timer.timeout.connect(poll_format_popup)
+    format_timer.start(50)  # Poll more frequently for responsive UI
 
     app.exec_()
     if listener:
