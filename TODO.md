@@ -1,136 +1,226 @@
 # TODO / Feature Tracker
 
-## Version 2.1.0 (feature branch)
-
-- All new development continues here.
-
-## Milestone 1: Project Setup & Planning
-- [x] Initialize git repository
-- [x] Create documentation files
-- [x] Define MAC address formats (8 total)
-- [x] Set up Python environment
-
-## Milestone 2: Core Functionality
-- [x] Implement MAC address parsing/conversion
-- [x] Add unit tests
-
-## Milestone 3: Clipboard & Hotkey
-- [x] Clipboard integration
-- [x] Global hotkey (configurable, conflict-checked)
-
-## Milestone 4: UI/UX Foundation
-- [x] Tray icon and menu
-- [x] Format selection popup
-- [x] App look and feel: 
-    - Modern, dark theme with orange and gray as primary colors.
-    - Highlighted item uses a green marker color.
-    - Selector dialog: fixed size, always fits all items (no scrolling needed in any direction).
-    - Top: app name and clipboard-fetched MAC address (monospace font, min 14px).
-    - Main window uses a background texture.
-    - Instructions moved to bottom, inside a visually distinct sub-window ("instructions" color theme, with icons for keys).
-    - Tray menu: include all standard options (Open Settings, About, Quit, Help, etc.), auto-generate content, display MIT license and credits as needed.
-    - After first execution: show a notification (auto-disappearing, no user interaction) that the app is running.
-    - After selection/minimize: show a brief notification that the app is still running in the tray (auto-disappearing).
-    - Use icons for key instructions.
-    - Window always appears centered on the active screen, regardless of resolution.
-
-## Milestone 5: Preferences & Autostart
-- [x] User preferences: autostart, default format, timer, about/credits/license info (settings stored in %APPDATA%/mac-converter-2/settings.json)
-- [x] Settings dialog accessible from tray menu (change preferences: autostart, default format, timer, etc.)
-- [x] About dialog with app info, author, credits, and MIT license
-- [x] App always loads/saves settings from %APPDATA%/mac-converter-2/settings.json
-- [x] App uses default format and timer from settings
-- [x] Autostart logic: add/remove from Windows startup based on user preference
-- [x] Robust error handling for settings file
-- [ ] Polish UI for settings/about dialogs
-- [ ] Update README.md and CHANGELOG.md to reflect new settings features and usage
-
-## Milestone 6: Packaging & Installer
-- [x] Compile to .exe (PyInstaller)
-- [ ] Full Windows installer (Start Menu shortcut, autostart, per-user/system-wide install) [Planned, not started]
-- [ ] Add uninstall/autostart options
-
-## Milestone 7: Documentation & QA
-- [x] Update docs, logs, changelogs
-- [x] Manual/automated testing
-- [ ] Add screenshots/GIFs and troubleshooting section to README.md [Planned, not started]
-- [ ] Add notification (popup or sound) when a MAC address is converted (user-configurable in settings). [Planned, not started]
-- [ ] Regularly update and track milestone progress in this file and in the changelog during development. Ensure all completed, in-progress, and planned tasks are clearly marked and up to date.
-
-## Milestone 8: Linux Support (Future)
-- [ ] Add Linux support for all features
+**Current Version:** 2.2.0 (Production Ready)
+**Last Updated:** 2025-12-31
 
 ---
 
-## Desired/Expected Application Behavior
+## Completed Milestones
 
-- When the app executes, it resides in memory and waits for the global hotkey.
-- When the hotkey is pressed, it reads the last entry from the clipboard.
-- If the clipboard content is not a valid MAC address, it copies "not a valid mac :-)" to the clipboard and keeps waiting for the next hotkey press.
-- If the clipboard content is a valid MAC address, it shows the user a window selector dialog.
-- When the selector window is displayed:
-  - The window is brought to the front and focused over any other window.
-  - A timer (default 6 seconds) starts ticking.
-  - If the user presses any key, the timer stops permanently.
-  - If the timer reaches 0, the window hides and the clipboard remains unchanged.
-  - The user can use the arrow keys (up, down, left, right), ESC, and ENTER to navigate, select, or hide the window.
-  - The user can also click on a cell with the mouse to select a value.
-  - Once a value is selected (by keyboard or mouse), or ESC/timeout occurs, the window hides (minimized back to the tray bar) and the app keeps running in the background, waiting for the next hotkey.
-  - Only if the user selects quit from the traybar menu does the application exit.
+### ✅ Milestone 1: Project Setup & Planning
+- [x] Initialize git repository
+- [x] Create documentation files
+- [x] Define MAC address formats (10 total)
+- [x] Set up Python environment
 
-## Known Issues
-- Windows: Dialog focus/foreground bug persists despite all known workarounds (dummy window, SetForegroundWindow, etc.). See code and comments for details. No further workaround planned.
+### ✅ Milestone 2: Core Functionality
+- [x] Implement MAC address parsing/conversion
+- [x] Support 10 MAC address formats
+- [x] Add unit tests
 
-## Roadmap / TODO (as of 2025-06-04)
-- Implement persistent settings (hotkey, timeout, default MAC format) with both a config file (standardized location, e.g. %APPDATA%/mac-converter-2/settings.json) and a settings dialog accessible from the tray menu. Settings must persist between app executions. When packaging as an installer, ensure settings are stored in a user-writable, standard location.
-- Add notification (popup or sound) when a MAC address is converted (user-configurable in settings). [Planned, not started]
-- Full Windows installer (Start Menu shortcut, autostart, per-user/system-wide install) [Planned, not started]
-- Add screenshots/GIFs and troubleshooting section to README.md [Planned, not started]
-- Revisit release planning and cross-platform support at a later stage.
+### ✅ Milestone 3: Clipboard & Hotkey
+- [x] Clipboard integration
+- [x] Global hotkey (configurable, no admin required)
+- [x] Hotkey parsing for pynput compatibility
+- [x] Thread-safe hotkey listener
 
-- [ ] Regularly update and track milestone progress in this file and in the changelog during development. Ensure all completed, in-progress, and planned tasks are clearly marked and up to date.
+### ✅ Milestone 4: Auto-Cycling Converter
+- [x] Auto-cycling format selection (0→1→2→...→9→0)
+- [x] Instant format conversion on hotkey press
+- [x] Automatic clipboard update with converted MAC
+- [x] Remove legacy format selector dialog
 
-Add new tasks below as needed.
+### ✅ Milestone 5: Tray Notifications
+- [x] Tray notifications for converted MAC addresses
+- [x] Error notifications for invalid MAC addresses
+- [x] Configurable notification duration (1-10 seconds)
+- [x] Thread-safe notification display
+- [x] Auto-dismiss after configured duration
 
-- [x] Debug and confirm selector dialog navigation and highlight logic (2025-06-05)
-- [x] Add detailed debug output for navigation, selection, and cell state
-- [x] Reduce dialog spam in console
-- [ ] Remove debug output and finalize UI polish (next session)
-- [ ] Continue with tray menu/notification improvements and any further user-requested features
+### ✅ Milestone 6: UI/UX Enhancements
+- [x] Dark theme for all dialogs (#2b2b2b background)
+- [x] Format popup with icon header (48x48)
+- [x] Settings dialog with grouped sections
+- [x] About dialog with app icon (96x96)
+- [x] Professional styling and color scheme
+- [x] Clickable GitHub link in About dialog
 
-# TODO
+### ✅ Milestone 7: User Preferences
+- [x] Persistent settings in %APPDATA%\mac-converter-2\settings.json
+- [x] Settings dialog accessible from tray menu
+- [x] Configurable global hotkey
+- [x] Configurable notification duration
+- [x] Autostart (Start with Windows) option
+- [x] Robust error handling for settings file
 
-- [x] Robust, admin-requiring hotkey (keyboard package)
-- [x] Info box always shows correct MAC
-- [x] Modern, robust, and visually clear UI/UX
-- [x] Remove all legacy/unused code and debug output
-- [x] Clean up documentation and comments
-- [x] Clean tray quit and error-free shutdown
+### ✅ Milestone 8: Windows Installer
+- [x] PyInstaller executable build (mac-converter.spec)
+- [x] Inno Setup installer script (installer.iss)
+- [x] Professional wizard-style installation
+- [x] Optional desktop shortcut
+- [x] Optional Windows startup entry
+- [x] Clean uninstaller with settings cleanup
+- [x] Embedded app icon in executable
+- [x] No admin rights required for installation
 
-## Next Steps
-- [ ] Optional: Polish UI further (colors, spacing, etc.)
-- [ ] Optional: Add installer or packaging for Windows
-- [ ] Optional: Add user preferences (autostart, default format, etc.)
-- [ ] Gather user feedback for future improvements
+### ✅ Milestone 9: Documentation & QA
+- [x] Update README.md with v2.2.0 features
+- [x] Update CHANGELOG.md with release notes
+- [x] Update DEVELOPMENT_LOG.md with session notes
+- [x] Manual testing and verification
+- [x] Clean up temporary files and debug output
+- [x] Add .gitignore entries for build artifacts
+- [x] GitHub repository sync
 
-## UI/UX Design Checklist
+---
 
-- [ ] All headers and cells left-aligned
-- [ ] Consistent column widths and padding
-- [ ] Color palette: dark background, orange headers, green highlight, purple info
-- [ ] Info/instructions always visible at top
-- [ ] Controls: Arrow keys, Enter, Esc, Tab
-- [ ] Dialog always on top and focused
-- [ ] See README.md for full UI/UX guidelines and diagram
+## Current Release (v2.2.0)
 
-## UI/UX and Window Management Guidelines
+**Status:** Production Ready ✅
 
-- The hotkey opens the main window.
-- Tray menu opens About, Settings, and future windows (TBD).
-- Each window is fully independent (no shared logic except UI/UX look and feel).
-- Hotkey must not interfere with any other app element or block execution.
-- If a tray menu window is open, no other window can be opened until it is closed.
-- All windows must have standard controls (close, minimize, etc).
+### Features Included
+- ✅ Auto-cycling MAC format converter (10 formats)
+- ✅ Configurable global hotkey (no admin required)
+- ✅ Tray notifications with duration control
+- ✅ Dark theme UI with professional styling
+- ✅ Settings dialog (hotkey, duration, autostart)
+- ✅ About dialog with app info and GitHub link
+- ✅ Persistent settings storage
+- ✅ Windows installer package
+- ✅ Standalone executable
+- ✅ Clean, production-ready codebase
 
-## Design Constraints
-- The app must never require administrator rights to run or register hotkeys. All features must work for standard users. Hotkey system uses pynput (no elevation required).
+### Build Artifacts
+- Standalone executable: `dist/MAC-Converter.exe` (55 MB)
+- Windows installer: `installer-output/MAC-Converter-Setup-v2.2.0.exe` (58 MB)
+- Source code: All files cleaned and optimized
+
+---
+
+## Future Enhancements (v2.3.0+)
+
+### Potential Features
+- [ ] Tray history of recent conversions
+- [ ] Batch MAC address conversion
+- [ ] Additional MAC format variations
+- [ ] Custom user-defined formats
+- [ ] Hotkey history/logs
+- [ ] Settings import/export
+- [ ] Multi-language support
+- [ ] Linux/macOS full support
+- [ ] Update checker
+- [ ] Performance metrics/statistics
+
+### Nice-to-Have Improvements
+- [ ] Keyboard shortcuts guide in About
+- [ ] Drag-and-drop MAC file import
+- [ ] System tray menu with recent formats
+- [ ] Dark/Light theme toggle
+- [ ] Custom notification sounds
+- [ ] Auto-update functionality
+
+### Technical Debt / Refactoring
+- [ ] Add unit tests for UI dialogs
+- [ ] Integration tests for full workflow
+- [ ] Code coverage analysis
+- [ ] Performance profiling
+- [ ] Memory usage optimization
+
+---
+
+## Known Limitations
+
+- **Windows Only**: Primary platform is Windows 10/11
+- **Single Format Cycle**: Doesn't remember user-selected format between sessions (always resets to 0)
+- **No Batch Processing**: One MAC address at a time
+- **No History**: Previous conversions not stored
+- **No Update Mechanism**: Manual updates via GitHub
+
+---
+
+## Design Constraints (Permanent)
+
+- ✅ **No Admin Rights**: App must never require administrator privileges
+- ✅ **No Configuration Wizards**: Works out of the box with sensible defaults
+- ✅ **Minimal Dependencies**: Lightweight, fast startup
+- ✅ **Dark Theme Only**: Professional appearance
+- ✅ **System Tray Focus**: Not a window application
+
+---
+
+## Recent Changes (Session: 2025-12-31)
+
+### What Was Done
+- ✅ Built production Windows installer using PyInstaller and Inno Setup
+- ✅ Created standalone executable (55 MB)
+- ✅ Generated installer package (58 MB)
+- ✅ Cleaned up temporary development files
+- ✅ Updated .gitignore with build artifacts
+- ✅ Added LICENSE.txt and mac-converter.spec to git
+- ✅ Pushed all changes to GitHub (dev branch)
+- ✅ Updated documentation (README.md, DEVELOPMENT_LOG.md)
+
+### Current Project State
+- All milestones through v2.2.0 completed
+- Production-ready releases available
+- GitHub repository up to date
+- Code is clean, documented, and tested
+
+---
+
+## Next Session Tasks (Optional)
+
+- [ ] Create GitHub release with installer and executable downloads
+- [ ] Create installation guide for end users
+- [ ] Monitor user feedback from initial release
+- [ ] Plan v2.3.0 features based on feedback
+- [ ] Update TODO items as new requirements emerge
+
+---
+
+## How to Build
+
+### Prerequisites
+- Python 3.8+
+- PyInstaller (for executable)
+- Inno Setup v6+ (for installer, Windows only)
+
+### Build Executable
+```bash
+pyinstaller mac-converter.spec
+# Output: dist/MAC-Converter.exe
+```
+
+### Build Installer
+```bash
+"C:\Program Files (x86)\Inno Setup 6\iscc.exe" installer.iss
+# Output: installer-output/MAC-Converter-Setup-v2.2.0.exe
+```
+
+---
+
+## Development Guidelines
+
+### When Adding Features
+1. Update this TODO.md with new feature items
+2. Create feature branch from `dev`
+3. Update CHANGELOG.md with changes
+4. Update README.md if user-facing
+5. Test thoroughly before committing
+6. Merge to `dev` branch
+7. Push to GitHub
+
+### Code Quality Standards
+- No admin rights required for any feature
+- Use pynput for hotkey registration
+- Store settings in %APPDATA%\mac-converter-2\
+- Use dark theme for all UI elements
+- Maintain thread-safe operations
+- Include error handling and validation
+- Clean up debug output before release
+
+---
+
+**Last Updated:** 2025-12-31
+**Maintained By:** Alejandro Lichtenfeld
+**Repository:** https://github.com/aleled/mac-converter-2

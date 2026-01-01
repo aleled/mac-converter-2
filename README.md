@@ -1,186 +1,289 @@
-> **NOTE:** For future development, always update this file, LICENSE.txt, and requirements.txt whenever new libraries, features, or external code are added. Ensure all legal attributions, author info, and license details are current and correct.
+# MAC Address Converter
 
-# Git user info for project commits:
-# Name: Alejandro Lichtenfeld
-# Email: 4leled@gmail.com
-# (Set globally in git config as of 2025-06-04)
+A lightweight Windows system tray utility for converting MAC addresses between different formats with a global hotkey, auto-cycling format selection, and clipboard integration.
 
-# MAC Address Converter Utility
+**Current Version:** 2.2.0
+**Status:** Production-ready ✅
+**License:** MIT
+**Author:** Alejandro Lichtenfeld
 
-> **NOTE:** As of v2.2.0, the app no longer requires administrator rights for global hotkey functionality. The hotkey system now uses pynput, which works without elevation. All future development must preserve this constraint: **the app must never require admin rights to run or register hotkeys.**
-
-A Windows system tray utility for converting MAC addresses between industry formats with a global hotkey, auto-cycling format selection, and clipboard integration.
+---
 
 ## Features
-- System tray utility for Windows (and WSL/Linux) to convert and copy MAC addresses in multiple formats.
-- Global hotkey (configurable, default Alt+Shift+M) to auto-cycle through MAC address formats (**no admin required**).
-- Auto-cycling: Each hotkey press converts to the next format (cycles through 10 formats: colon-separated, hyphen-separated, dot-separated, plain, in uppercase/lowercase variants).
-- Tray notifications showing converted MAC address (configurable duration, default 3 seconds).
-- Error notifications for invalid MAC addresses in clipboard.
-- Configurable hotkey: Change global hotkey via Settings dialog (e.g., alt+shift+m, ctrl+shift+c).
-- Configurable notification duration (1-10 seconds).
-- Persistent user preferences: autostart, hotkey, notification duration, about/credits/license info (settings stored in %APPDATA%/mac-converter-2/settings.json).
-- Settings dialog accessible from tray menu.
-- About dialog with app info, author, credits, and MIT license.
-- Clean, production-ready codebase with no legacy dialog selector.
 
-## Design Constraints
-- **No admin rights required:** The app must never require administrator privileges to run or register hotkeys. All hotkey and tray functionality must work for standard users.
+- **System Tray Utility**: Runs in the background with custom icon in system tray
+- **Auto-Cycling Format Conversion**: Press hotkey to instantly cycle through 10 MAC address formats
+- **Global Hotkey**: Configurable hotkey (default: Alt+Shift+M) - no admin rights required
+- **Automatic Clipboard Management**: Converted MAC address is automatically copied to clipboard
+- **Tray Notifications**: Shows converted MAC address in a popup notification (configurable duration: 1-10 seconds, default: 3)
+- **Error Handling**: Displays error notifications for invalid MAC addresses in clipboard
+- **Dark Theme UI**: Modern, professional dark theme with organized dialogs
+- **Settings Dialog**: Configure hotkey, notification duration, and autostart option via tray menu
+- **About Dialog**: View app information, version, author, license, and GitHub link
+- **Persistent Settings**: All user preferences stored in `%APPDATA%\mac-converter-2\settings.json`
+- **No Admin Rights Required**: Uses pynput for hotkey registration - runs without elevation
 
-## Milestones
-- v2.1: Persistent user preferences, settings dialog, about dialog, robust error handling, and documentation polish.
-- v2.0: Stable release with all UI/UX, hotkey, and info box improvements.
+---
 
-## Version
+## Supported MAC Address Formats
 
-Current version: 2.2.0 (auto-cycling with notifications)
+The app cycles through 10 formats:
 
-## Usage
-1. Run the app (no admin required).
-2. Copy a MAC address to clipboard.
-3. Press the configured hotkey (default Alt+Shift+M) to auto-convert to the next format.
-4. A tray notification shows the converted MAC address (auto-dismisses after configured duration).
-5. The converted MAC is automatically copied to clipboard, ready to paste immediately.
+1. Colon-separated uppercase: `AA:BB:CC:DD:EE:FF`
+2. Colon-separated lowercase: `aa:bb:cc:dd:ee:ff`
+3. Hyphen-separated uppercase: `AA-BB-CC-DD-EE-FF`
+4. Hyphen-separated lowercase: `aa-bb-cc-dd-ee-ff`
+5. Dot-separated uppercase: `AABB.CCDD.EEFF`
+6. Dot-separated lowercase: `aabb.ccdd.eeff`
+7. Plain uppercase: `AABBCCDDEEFF`
+8. Plain lowercase: `aabbccddeeff`
+9. Windows format uppercase: `AA-BB-CC-DD-EE-FF` (alternate)
+10. Windows format lowercase: `aa-bb-cc-dd-ee-ff` (alternate)
 
-## Roadmap / TODO (as of 2025-06-04)
-- [ ] Implement persistent settings (hotkey, timeout, default MAC format) with both a config file (standardized location, e.g. %APPDATA%/mac-converter-2/settings.json) and a settings dialog accessible from the tray menu.
-    - Settings must persist between app executions.
-    - When packaging as an installer, ensure settings are stored in a user-writable, standard location.
-- [ ] Add notification (popup or sound) when a MAC address is converted (user-configurable in settings). [Planned, not started]
-- [ ] Full Windows installer (Start Menu shortcut, autostart, per-user/system-wide install) [Planned, not started]
-- [ ] Add screenshots/GIFs and troubleshooting section to README.md [Planned, not started]
-- [ ] Revisit release planning and cross-platform support at a later stage.
+---
 
-## Setup (Development)
-1. Clone the repository
-2. Create a virtual environment:
-   ```zsh
-   python3 -m venv venv
-   source venv/bin/activate
+## Installation
+
+### Option 1: Windows Installer (Recommended)
+
+1. Download `MAC-Converter-Setup-v2.2.0.exe` from GitHub releases
+2. Run the installer and follow the wizard
+3. Choose optional features:
+   - Desktop shortcut
+   - Start with Windows (autostart)
+4. App launches automatically after installation
+5. No admin rights required
+
+### Option 2: Standalone Executable
+
+1. Download `MAC-Converter.exe` from GitHub releases
+2. Run the executable directly
+3. App will reside in system tray
+
+### Option 3: Run from Source (Development)
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/aleled/mac-converter-2.git
+   cd mac-converter-2
    ```
-3. Install requirements:
-   ```zsh
+
+2. Create and activate a virtual environment:
+   ```bash
+   python -m venv venv
+   venv\Scripts\activate  # Windows
+   ```
+
+3. Install dependencies:
+   ```bash
    pip install -r requirements.txt
    ```
 
-## Environment Setup (Every Session)
-> **IMPORTANT:**
-> Before working on this project, always activate the Python virtual environment:
-> 
-> ```zsh
-> source ./env_load.sh
-> ```
-> 
-> This ensures all dependencies are available and the environment is isolated.
+4. Run the app:
+   ```bash
+   python clipboard_hotkey.py
+   ```
 
-## Packaging
-- Will use PyInstaller for .exe generation
-- Installer will be created for Windows
+---
 
-## Documentation
-- See `DEVELOPMENT_LOG.md` for session logs
-- See `CHANGELOG.md` for version history
+## Usage
 
-## Git Remote Setup (Windows/PowerShell)
+1. **Start the App**: Run the executable or installer
+2. **Minimize to Tray**: App runs in system tray (appears as icon in taskbar)
+3. **Copy MAC Address**: Copy a MAC address to clipboard
+4. **Press Hotkey**: Press Alt+Shift+M (or your configured hotkey)
+5. **See Result**: A notification popup appears showing the converted MAC address
+6. **Paste**: The converted MAC is automatically in clipboard - paste anywhere
 
-If you need to update your remote repository URL (for example, after creating a new GitHub repo), use the following command in your project directory:
+### Notification Behavior
 
-```powershell
-git remote set-url origin https://github.com/aleled/mac-converter-2.git
+- **Valid MAC Address**: Shows converted format in tray notification for configured duration (default 3 seconds)
+- **Invalid MAC Address**: Shows error message "No valid MAC address in clipboard"
+- **Rapid Presses**: Each hotkey press instantly replaces the previous notification
+
+### Accessing Menus
+
+Right-click the tray icon to access:
+- **Settings**: Configure hotkey, notification duration, autostart option
+- **About**: View app information, version, license, and GitHub link
+- **Quit**: Close the application
+
+---
+
+## Configuration
+
+### Default Settings
+
+Settings are stored in: `%APPDATA%\mac-converter-2\settings.json`
+
+```json
+{
+  "hotkey": "alt+shift+m",
+  "notification_duration": 3,
+  "autostart": false,
+  "last_format_index": 0
+}
 ```
 
-This will point your local repository to the correct remote on GitHub. After this, you can use `git push`, `git pull`, and other git commands as usual.
+### Changing Settings
 
-## Application Behavior
+1. Right-click tray icon → **Settings**
+2. **Hotkey Configuration**: Enter custom hotkey (e.g., `ctrl+shift+c`, `alt+m`)
+3. **Notification Preferences**: Select popup duration (1-10 seconds)
+4. **Startup Options**: Enable "Start with Windows" to auto-launch on startup
+5. Click **Save**
+6. **Note**: Hotkey changes require app restart
 
-- When the app executes, it resides in memory and waits for the global hotkey.
-- When the hotkey is pressed, it reads the last entry from the clipboard.
-- If the clipboard content is not a valid MAC address, a tray notification displays "No valid MAC address in clipboard" for the configured duration (default 3 seconds), and the app resumes waiting for the next hotkey press.
-- If the clipboard content is a valid MAC address:
-  - The app auto-cycles to the next format (index 0→1→2→...→9→0).
-  - The converted MAC address is copied to the clipboard.
-  - A tray notification displays the converted MAC address for the configured duration.
-  - The user can immediately paste the converted MAC address.
-  - Each subsequent hotkey press cycles to the next format in the sequence.
+### Hotkey Format
 
-## Debugging and UI/UX Improvements (2025-06-05)
-- Selector dialog navigation and highlight logic are robust and debugged.
-- Only columns 1 and 2 are selectable; highlight is green with orange text and bold font.
-- Debug output is present for troubleshooting and will be removed in the next session.
-- Session state and progress are preserved for seamless continuation.
+Hotkey format: `modifier+modifier+key`
 
-## Project Status (2025-06-04)
-- All code and tests now have thorough docstrings.
-- Persistent Windows focus bug is documented in TODO.md and code comments.
-- Old/unused files moved to old/ for archival.
-- See CHANGELOG.md for full details.
+Examples:
+- `alt+shift+m` (default)
+- `ctrl+shift+c`
+- `alt+m`
+- `ctrl+shift+x`
 
-## HOW TO COOK: General Guidelines
+Special keys: `alt`, `ctrl`, `shift`, `tab`, `enter`, `delete`, `backspace`
 
-1. The hotkey opens a window, referred to as the "main window".
-2. The tray menu opens other windows such as About, Settings, and possibly future ones (names TBD).
-3. Each window is independent from the others. No shared functions, callbacks, timers, or deadlocks. The only thing in common is the UI/UX design look and feel.
-4. The hotkey must not interfere in any way with the operation of any other app element, keys, bindings, or block execution.
-5. If any window launched from the tray menu is open, it will not allow moving to any other window until it is closed.
-6. Every window should have common control buttons like Close, Minimize, etc.
+---
 
-See also: TODO.md and DEVELOPMENT_LOG.md for implementation notes.
+## System Requirements
 
-## UI/UX Design Guidelines for MAC Address Formatter App
+- **OS**: Windows 7 or later (Windows 10/11 recommended)
+- **Python**: 3.8+ (if running from source)
+- **Admin Rights**: Not required (uses pynput for hotkey)
+- **Dependencies**: PyQt5, pynput, pyperclip, pystray, pillow
 
-### Layout and Appearance
+---
+
+## Development
+
+### Project Structure
 
 ```
-+-----------------------------------------------------------+
-| icon  MAC Address Formatter App                  [_] [X]  |
-+-----------------------------------------------------------+
-| Select the MAC address format to copy to clipboard        |
-+-----------------------------------------------------------+
-| [column 1]       | [column 2]         | [column 3]        |
-| FORMAT STYLE     | LOWER CASE         | UPPER CASE        |
-|------------------+--------------------+-------------------|
-| Colon-separated  | aa:bb:cc:dd:ee:ff  | AA:BB:CC:DD:EE:FF |
-| Hyphen-separated | aa-bb-cc-dd-ee-ff  | AA-BB-CC-DD-EE-FF |
-| Dot-separated    | aabb.ccdd.eeff     | AABB.CCDD.EEFF    |
-| Plain            | aabbccddeeff       | AABBCCDDEEFF      |
-+-----------------------------------------------------------+
-
-INFORMATION:
-| [label] [information                   ] |
-
-Controls:
-
-[ Arrow Keys  ] [ Navigate Up/Down/Left/Right ]
-[ Esc / Enter ] [ Cancel Selection / Confirm  ]
-[ Tab         ] [ Switch Between Fields       ]
-
-
-- column1 - width for entire column and row should be the same, min width as largest string in that row.
-- column2 - width for entire column and row should be the same, min width as largest string in that row.
-- column3 - width for entire column and row should be the same, min width as largest string in that row.
-
+mac-converter-2/
+├── clipboard_hotkey.py      # Main application
+├── mac_formats.py           # MAC format converters
+├── mac-converter.spec       # PyInstaller configuration
+├── installer.iss            # Inno Setup configuration
+├── icon-v1.png              # App icon
+├── LICENSE.txt              # MIT License
+├── requirements.txt         # Python dependencies
+├── README.md                # This file
+├── CHANGELOG.md             # Version history
+├── DEVELOPMENT_LOG.md       # Session notes
+└── TODO.md                  # Feature roadmap
 ```
 
-### Color and Theme Guidelines
-- **Background:** Deep dark gray (`#23272e`), with lighter dark for info areas (`#181a20`).
-- **Headers/Labels:** Orange (`#ffb347`) for section headers and format names.
-- **Highlight:** Green (`#39d353`) for the selected cell background, with purple (`#b266ff`) text.
-- **Text:** White (`#fff`) for normal text, purple (`#b266ff`) for info and highlights.
-- **Borders:** Subtle gray (`#444`) for cell and header separators.
-- **Font:** Use monospace (Consolas) for MAC addresses, bold for headers.
+### Building Your Own Installer
 
-### UX Guidelines
-- All headers and cells are left-aligned for clarity.
-- Consistent cell and header widths for perfect column alignment.
-- Info/instructions always visible at the top.
-- Keyboard and mouse navigation supported.
-- Dialog always appears on top and receives focus.
-- Controls and instructions are always visible and clear.
+1. Install build tools:
+   ```bash
+   pip install PyInstaller
+   ```
 
-### Controls
-- **Arrow Keys:** Navigate between cells.
-- **Enter/Click:** Copy selected MAC format to clipboard.
-- **Esc:** Cancel/close dialog.
-- **Tab:** Switch between fields (future: for accessibility).
+2. Build executable:
+   ```bash
+   pyinstaller mac-converter.spec
+   ```
 
-> **Maintain these guidelines for all future UI/UX iterations.**
+3. Install Inno Setup (https://jrsoftware.org/isdl.php)
+
+4. Build installer:
+   ```bash
+   "C:\Program Files (x86)\Inno Setup 6\iscc.exe" installer.iss
+   ```
+
+Output files:
+- Executable: `dist/MAC-Converter.exe`
+- Installer: `installer-output/MAC-Converter-Setup-v2.2.0.exe`
+
+---
+
+## Design Principles
+
+- **No Admin Rights**: App never requires administrator privileges
+- **No Configuration Files Required**: Works out of the box with sensible defaults
+- **Responsive Hotkey**: Instant format cycling without dialog delays
+- **Clean UX**: Modern dark theme, professional appearance
+- **Persistent Settings**: User preferences saved automatically
+- **Error Handling**: Graceful handling of invalid clipboard content
+
+---
+
+## Troubleshooting
+
+### Hotkey Not Working
+
+1. Check if hotkey is already used by another application
+2. Right-click tray icon → **Settings** → verify hotkey setting
+3. Try a different hotkey combination
+4. Restart the app after changing hotkey
+
+### Notification Not Showing
+
+1. Check notification duration setting (should be 1-10 seconds)
+2. Verify notification duration is not set to 0
+3. Right-click tray icon → **Settings** → adjust duration
+4. Restart the app
+
+### Tray Icon Missing
+
+1. Check Windows system tray (arrow icon on taskbar)
+2. Right-click taskbar → **Taskbar settings** → ensure notifications are enabled
+3. Restart the app
+
+### Settings Not Persisting
+
+1. Verify settings file exists: `%APPDATA%\mac-converter-2\settings.json`
+2. Check file permissions (should be readable/writable)
+3. Delete settings file to restore defaults and restart
+
+---
+
+## Supported Platforms
+
+- **Windows**: Full support (10, 11 recommended)
+- **WSL/Linux**: Partial support (tray icon may not display)
+- **macOS**: Not tested
+
+---
+
+## Version History
+
+- **2.2.0** (2025-12-31): Auto-cycling converter, dark theme UI enhancements, Windows installer
+- **2.1.0** (2025-06-07): Persistent settings, Settings dialog, About dialog, admin rights removed
+- **2.0.0** (2025-06-06): Stable release with global hotkey and format selector
+
+See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
+
+---
+
+## Contributing
+
+To contribute:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+---
+
+## License
+
+MIT License - See [LICENSE.txt](LICENSE.txt) for details
+
+---
+
+## Support
+
+For issues, questions, or suggestions:
+- GitHub Issues: https://github.com/aleled/mac-converter-2/issues
+- GitHub Repository: https://github.com/aleled/mac-converter-2
+
+---
+
+**Enjoy converting MAC addresses effortlessly! 🎯**
