@@ -90,10 +90,14 @@ tray_icon_ready = threading.Event()
 # Global hotkey listener
 listener = None
 
+# Global notification timer management - allows cancelling previous notification
+current_notification_timer = None
+
 # --- Helper function for notifications with custom duration ---
 def show_notification_with_duration(icon, message, title, duration_seconds):
     """
     Show notification and auto-remove after specified duration.
+    Cancels any previous notification timer to allow immediate updates.
 
     Args:
         icon (pystray.Icon): The tray icon instance.
@@ -101,8 +105,18 @@ def show_notification_with_duration(icon, message, title, duration_seconds):
         title (str): The notification title.
         duration_seconds (int): How long to display the notification in seconds.
     """
+    global current_notification_timer
+
     if not icon:
         return
+
+    # Cancel previous notification timer if one is active
+    if current_notification_timer is not None:
+        current_notification_timer.cancel()
+        try:
+            icon.remove_notification()
+        except:
+            pass  # Ignore errors if notification already dismissed
 
     icon.notify(message, title)
 
@@ -113,9 +127,9 @@ def show_notification_with_duration(icon, message, title, duration_seconds):
         except:
             pass  # Ignore errors if notification already dismissed
 
-    timer = threading.Timer(duration_seconds, remove)
-    timer.daemon = True
-    timer.start()
+    current_notification_timer = threading.Timer(duration_seconds, remove)
+    current_notification_timer.daemon = True
+    current_notification_timer.start()
 
 def handle_hotkey(app):
     """
@@ -311,10 +325,30 @@ def listen_hotkey(app):
     # Parse hotkey from settings (e.g., 'alt+shift+m' -> '<alt>+<shift>+m')
     hotkey_str = settings.get('hotkey', 'alt+shift+m')
 
+    def format_hotkey_for_pynput(hotkey_str):
+        """
+        Convert hotkey string like 'alt+shift+m' to pynput format '<alt>+<shift>+m'.
+        Special keys (alt, shift, ctrl, etc.) get angle brackets; regular chars don't.
+        """
+        special_keys = {
+            'alt', 'shift', 'ctrl', 'control', 'win', 'cmd',
+            'tab', 'enter', 'space', 'backspace', 'delete', 'escape', 'esc',
+            'home', 'end', 'pageup', 'pagedown', 'insert', 'f1', 'f2', 'f3', 'f4',
+            'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12', 'up', 'down', 'left', 'right'
+        }
+        parts = hotkey_str.lower().split('+')
+        formatted_parts = []
+        for part in parts:
+            if part in special_keys:
+                formatted_parts.append(f'<{part}>')
+            else:
+                formatted_parts.append(part)  # Regular chars without angle brackets
+        return '+'.join(formatted_parts)
+
     try:
-        # Convert 'alt+shift+m' to pynput format '<alt>+<shift>+m'
-        parsed_hotkey = keyboard.HotKey.parse(f'<{hotkey_str.replace("+", ">+<")}>')
-        print(f"[INFO] Hotkey '{hotkey_str}' registered (no admin required).")
+        formatted = format_hotkey_for_pynput(hotkey_str)
+        parsed_hotkey = keyboard.HotKey.parse(formatted)
+        print(f"[INFO] Hotkey '{hotkey_str}' registered as '{formatted}' (no admin required).")
     except Exception as e:
         print(f"[ERROR] Invalid hotkey '{hotkey_str}', using default 'alt+shift+m': {e}")
         parsed_hotkey = keyboard.HotKey.parse('<alt>+<shift>+m')
