@@ -2,7 +2,7 @@
 
 A lightweight Windows system tray utility for converting MAC addresses between different formats with a global hotkey, auto-cycling format selection, and clipboard integration.
 
-**Current Version:** 2.2.0
+**Current Version:** 2.3.0
 **Status:** Production-ready ✅
 **License:** MIT
 **Author:** Alejandro Lichtenfeld
@@ -17,9 +17,11 @@ A lightweight Windows system tray utility for converting MAC addresses between d
 - **Automatic Clipboard Management**: Converted MAC address is automatically copied to clipboard
 - **Tray Notifications**: Shows converted MAC address in a popup notification (configurable duration: 1-10 seconds, default: 3)
 - **Error Handling**: Displays error notifications for invalid MAC addresses in clipboard
+- **OUI Vendor Lookup**: Press Enter in format popup to identify MAC address manufacturer (IEEE database, ~38,900 vendors)
+- **OUI Database Management**: Auto-update, manual update with percentage progress bar, searchable database viewer
 - **Dark Theme UI**: Modern, professional dark theme with organized dialogs
-- **Settings Dialog**: Configure hotkey, notification duration, and autostart option via tray menu
-- **About Dialog**: View app information, version, author, license, and GitHub link
+- **Settings Dialog**: Configure hotkey, notification duration, autostart, and OUI vendor lookup options via tray menu
+- **About Dialog**: View app information, version, author, license, GitHub link, and OUI database statistics
 - **Persistent Settings**: All user preferences stored in `%APPDATA%\mac-converter-2\settings.json`
 - **No Admin Rights Required**: Uses pynput for hotkey registration - runs without elevation
 
@@ -46,7 +48,7 @@ The app cycles through 10 formats:
 
 ### Option 1: Windows Installer (Recommended)
 
-1. Download `MAC-Converter-Setup-v2.2.0.exe` from GitHub releases
+1. Download `MAC-Converter-Setup-v2.3.0.exe` from GitHub releases
 2. Run the installer and follow the wizard
 3. Choose optional features:
    - Desktop shortcut
@@ -101,6 +103,16 @@ The app cycles through 10 formats:
 - **Invalid MAC Address**: Shows error message "No valid MAC address in clipboard"
 - **Rapid Presses**: Each hotkey press instantly replaces the previous notification
 
+### OUI Vendor Lookup
+
+1. Press hotkey with a MAC address in clipboard - format popup appears
+2. Press **Enter** to look up the manufacturer (OUI vendor)
+3. Vendor popup appears showing the manufacturer name with a countdown timer
+4. Click **Copy to Clipboard** to copy the vendor name, or let it auto-close
+5. If the popup auto-closes, your clipboard still contains the converted MAC address
+
+The OUI database is downloaded automatically from IEEE on first run and auto-updates weekly (configurable).
+
 ### Accessing Menus
 
 Right-click the tray icon to access:
@@ -121,7 +133,11 @@ Settings are stored in: `%APPDATA%\mac-converter-2\settings.json`
   "hotkey": "alt+shift+m",
   "notification_duration": 3,
   "autostart": false,
-  "last_format_index": 0
+  "last_format_index": 0,
+  "oui_enabled": true,
+  "oui_auto_update": true,
+  "oui_update_interval_days": 7,
+  "oui_vendor_timeout": 5
 }
 ```
 
@@ -131,8 +147,9 @@ Settings are stored in: `%APPDATA%\mac-converter-2\settings.json`
 2. **Hotkey Configuration**: Enter custom hotkey (e.g., `ctrl+shift+c`, `alt+m`)
 3. **Notification Preferences**: Select popup duration (1-10 seconds)
 4. **Startup Options**: Enable "Start with Windows" to auto-launch on startup
-5. Click **Save**
-6. **Note**: Hotkey changes require app restart
+5. **OUI Vendor Lookup**: Enable/disable vendor lookup, configure auto-update interval and vendor popup timeout
+6. Click **Save**
+7. **Note**: Hotkey changes require app restart
 
 ### Hotkey Format
 
@@ -163,10 +180,11 @@ Special keys: `alt`, `ctrl`, `shift`, `tab`, `enter`, `delete`, `backspace`
 
 ```
 mac-converter-2/
-├── clipboard_hotkey.py      # Main application
-├── mac_formats.py           # MAC format converters
+├── clipboard_hotkey.py      # Main application (UI, hotkey, tray, popups)
+├── mac_formats.py           # MAC format detection and conversion
+├── oui_lookup.py            # OUI vendor database (download, parse, lookup)
 ├── mac-converter.spec       # PyInstaller configuration
-├── installer.iss            # Inno Setup configuration
+├── installer.iss            # Inno Setup installer script
 ├── icon-v1.png              # App icon
 ├── LICENSE.txt              # MIT License
 ├── requirements.txt         # Python dependencies
@@ -197,7 +215,7 @@ mac-converter-2/
 
 Output files:
 - Executable: `dist/MAC-Converter.exe`
-- Installer: `installer-output/MAC-Converter-Setup-v2.2.0.exe`
+- Installer: `installer-output/MAC-Converter-Setup-v2.3.0.exe`
 
 ---
 
@@ -252,6 +270,7 @@ Output files:
 
 ## Version History
 
+- **2.3.0** (2026-02-17): OUI vendor lookup, IEEE database integration, vendor popup, database management UI
 - **2.2.0** (2025-12-31): Auto-cycling converter, dark theme UI enhancements, Windows installer
 - **2.1.0** (2025-06-07): Persistent settings, Settings dialog, About dialog, admin rights removed
 - **2.0.0** (2025-06-06): Stable release with global hotkey and format selector

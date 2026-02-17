@@ -21,13 +21,14 @@ from PIL import Image, ImageDraw
 import threading
 import sys
 from mac_formats import detect_mac, convert_mac
+from oui_lookup import OUIDatabase
 import platform
 import os
-from PyQt5.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QHBoxLayout, QWidget, QSizePolicy, QCheckBox, QPushButton, QLineEdit, QSpinBox, QGroupBox
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QColor, QIcon, QBrush, QPixmap
-from PyQt5.QtCore import QTimer
-from PyQt5.QtGui import QCursor
+from PyQt5.QtWidgets import (QApplication, QDialog, QVBoxLayout, QLabel, QHBoxLayout, QWidget,
+    QSizePolicy, QCheckBox, QPushButton, QLineEdit, QSpinBox, QGroupBox, QProgressBar,
+    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QScrollArea)
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject
+from PyQt5.QtGui import QFont, QColor, QIcon, QBrush, QPixmap, QCursor
 import queue
 import ctypes
 import time
@@ -98,8 +99,21 @@ current_notification_timer = None
 # Global format popup instance tracker - allows instant replacement
 current_format_popup = None
 
+# Global vendor popup instance tracker
+current_vendor_popup = None
+
+# Global OUI database instance
+oui_db = None
+oui_status_queue = queue.Queue()
+
+# Queue for vendor lookup requests (Enter key detected globally)
+vendor_lookup_request_queue = queue.Queue()
+
+# Queue for manual OUI download progress updates (for interactive progress bar)
+oui_download_progress_queue = queue.Queue()
+
 # --- Format popup display function ---
-def show_format_popup(app, formats, current_index, duration_seconds):
+def show_format_popup(app, formats, current_index, duration_seconds, mac_normalized=None):
     """
     Show format selector popup with current format in bold.
     Replaces any existing popup instantly for responsive UX.
@@ -109,6 +123,7 @@ def show_format_popup(app, formats, current_index, duration_seconds):
         formats (list): List of (name, value) tuples for all MAC formats.
         current_index (int): Index of the currently selected format.
         duration_seconds (int): How long to display the popup (in seconds).
+        mac_normalized (str): Normalized 12-char hex MAC for OUI lookup.
     """
     global current_format_popup
 
@@ -121,7 +136,7 @@ def show_format_popup(app, formats, current_index, duration_seconds):
         current_format_popup = None
 
     # Create and show new popup
-    current_format_popup = FormatSelectorPopup(formats, current_index, duration_seconds)
+    current_format_popup = FormatSelectorPopup(formats, current_index, duration_seconds, mac_normalized)
     current_format_popup.show()
 
 
@@ -217,7 +232,8 @@ def handle_hotkey(app):
         'type': 'format',
         'formats': formats,
         'current_index': next_idx,
-        'duration': duration
+        'duration': duration,
+        'mac_normalized': mac,
     })
 
 # --- About Dialog ---
@@ -260,14 +276,14 @@ class AboutDialog(QDialog):
         """)
 
         layout = QVBoxLayout()
-        layout.setSpacing(15)
-        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setSpacing(6)
+        layout.setContentsMargins(20, 20, 20, 20)
 
-        # Icon at top (larger, centered)
+        # Icon at top (centered)
         try:
             icon_path = get_icon_path()
             pixmap = QPixmap(icon_path)
-            scaled_pixmap = pixmap.scaled(96, 96, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            scaled_pixmap = pixmap.scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             icon_label = QLabel()
             icon_label.setPixmap(scaled_pixmap)
             icon_label.setAlignment(Qt.AlignCenter)
@@ -279,15 +295,15 @@ class AboutDialog(QDialog):
         app_name = QLabel("MAC Address Converter")
         app_name.setAlignment(Qt.AlignCenter)
         app_font = QFont()
-        app_font.setPointSize(18)
+        app_font.setPointSize(14)
         app_font.setBold(True)
         app_name.setFont(app_font)
         layout.addWidget(app_name)
 
         # Version
-        version_label = QLabel("Version 2.2.0")
+        version_label = QLabel("Version 2.3.0")
         version_label.setAlignment(Qt.AlignCenter)
-        version_label.setStyleSheet("color: #999999; font-size: 11pt;")
+        version_label.setStyleSheet("color: #999999; font-size: 10pt;")
         layout.addWidget(version_label)
 
         # Separator
@@ -299,34 +315,85 @@ class AboutDialog(QDialog):
         # Author
         author_label = QLabel("Created by Alejandro Lichtenfeld")
         author_label.setAlignment(Qt.AlignCenter)
-        author_label.setStyleSheet("font-size: 11pt;")
+        author_label.setStyleSheet("font-size: 10pt;")
         layout.addWidget(author_label)
 
-        # Year
-        year_label = QLabel("© 2026")
-        year_label.setAlignment(Qt.AlignCenter)
-        year_label.setStyleSheet("color: #999999; font-size: 10pt;")
-        layout.addWidget(year_label)
-
-        # License
-        license_label = QLabel("Licensed under MIT License")
-        license_label.setAlignment(Qt.AlignCenter)
-        license_label.setStyleSheet("color: #999999; font-size: 10pt;")
-        layout.addWidget(license_label)
+        # Year + License on one line
+        year_license_label = QLabel("© 2026  •  MIT License")
+        year_license_label.setAlignment(Qt.AlignCenter)
+        year_license_label.setStyleSheet("color: #999999; font-size: 9pt;")
+        layout.addWidget(year_license_label)
 
         # GitHub link (clickable)
         github_label = QLabel('<a href="https://github.com/aleled/mac-converter-2" style="color: #0078d4;">View on GitHub</a>')
         github_label.setOpenExternalLinks(True)
         github_label.setAlignment(Qt.AlignCenter)
-        github_label.setStyleSheet("font-size: 10pt;")
+        github_label.setStyleSheet("font-size: 9pt;")
         layout.addWidget(github_label)
 
-        layout.addSpacing(10)
+        layout.addSpacing(3)
+
+        # OUI Database Information Section
+        oui_separator = QLabel()
+        oui_separator.setFixedHeight(1)
+        oui_separator.setStyleSheet("background-color: #555555;")
+        layout.addWidget(oui_separator)
+
+        oui_header = QLabel("OUI Vendor Database")
+        oui_header.setAlignment(Qt.AlignCenter)
+        oui_header_font = QFont()
+        oui_header_font.setPointSize(10)
+        oui_header_font.setBold(True)
+        oui_header.setFont(oui_header_font)
+        layout.addWidget(oui_header)
+
+        # Database stats - build info lines
+        if oui_db and oui_db.is_loaded:
+            oui_stats = []
+            oui_stats.append(f"OUI Entries: {oui_db.vendor_count:,}  •  Unique Vendors: {oui_db.unique_vendor_count:,}")
+            oui_stats.append(f"File Size: {oui_db.file_size_display}  •  Updated: {oui_db.last_modified_display}")
+
+            # Check settings for last download timestamp
+            last_dl = settings.get('oui_last_downloaded')
+            if last_dl:
+                try:
+                    import datetime
+                    dt = datetime.datetime.fromisoformat(last_dl)
+                    oui_stats.append(f"Downloaded: {dt.strftime('%Y-%m-%d %H:%M:%S')}")
+                except:
+                    oui_stats.append(f"Downloaded: {last_dl}")
+            else:
+                oui_stats.append("Downloaded: Unknown")
+
+            oui_stats.append(f"Source: standards-oui.ieee.org/oui/oui.csv")
+
+            for line in oui_stats:
+                stat_label = QLabel(line)
+                stat_label.setAlignment(Qt.AlignCenter)
+                stat_label.setStyleSheet("color: #b0b0b0; font-size: 8pt;")
+                stat_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+                layout.addWidget(stat_label)
+
+            # Location on separate line with word wrap
+            if oui_db:
+                loc_label = QLabel(oui_db.oui_path)
+                loc_label.setAlignment(Qt.AlignCenter)
+                loc_label.setStyleSheet("color: #888888; font-size: 7pt; font-family: 'Courier New';")
+                loc_label.setWordWrap(True)
+                loc_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+                layout.addWidget(loc_label)
+        else:
+            no_db_label = QLabel("Database not loaded")
+            no_db_label.setAlignment(Qt.AlignCenter)
+            no_db_label.setStyleSheet("color: #d32f2f; font-size: 9pt;")
+            layout.addWidget(no_db_label)
+
+        layout.addSpacing(6)
 
         # Close button
         close_button = QPushButton("Close")
         close_button.clicked.connect(self.accept)
-        close_button.setFixedWidth(120)
+        close_button.setFixedWidth(100)
 
         button_layout = QHBoxLayout()
         button_layout.addStretch()
@@ -335,13 +402,384 @@ class AboutDialog(QDialog):
         layout.addLayout(button_layout)
 
         self.setLayout(layout)
-        self.setFixedSize(450, 500)
+        self.setFixedWidth(460)
+        self.adjustSize()
 
 
 def show_about_dialog():
     """Show About dialog in main Qt thread."""
     dlg = AboutDialog()
     dlg.exec_()
+
+# --- OUI Database Viewer ---
+class OUIViewerDialog(QDialog):
+    """Read-only viewer for the OUI vendor database with search/filter."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("OUI Database Viewer")
+        self.setModal(True)
+
+        try:
+            icon_path = get_icon_path()
+            self.setWindowIcon(QIcon(icon_path))
+        except:
+            pass
+
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #2b2b2b;
+                color: #ffffff;
+            }
+            QLabel {
+                color: #e0e0e0;
+            }
+            QLineEdit {
+                background-color: #3c3c3c;
+                color: #ffffff;
+                border: 1px solid #555555;
+                border-radius: 4px;
+                padding: 6px;
+                font-size: 10pt;
+            }
+            QLineEdit:focus {
+                border: 1px solid #0078d4;
+            }
+            QTableWidget {
+                background-color: #1e1e1e;
+                color: #e0e0e0;
+                border: 1px solid #555555;
+                gridline-color: #3c3c3c;
+                font-size: 9pt;
+            }
+            QTableWidget::item {
+                padding: 4px;
+            }
+            QTableWidget::item:selected {
+                background-color: #0078d4;
+            }
+            QHeaderView::section {
+                background-color: #3c3c3c;
+                color: #ffffff;
+                border: 1px solid #555555;
+                padding: 6px;
+                font-weight: bold;
+                font-size: 9pt;
+            }
+            QPushButton {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 16px;
+                font-size: 10pt;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1084d8;
+            }
+        """)
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(10)
+
+        # Header
+        header = QLabel("OUI Vendor Database")
+        hfont = header.font()
+        hfont.setBold(True)
+        hfont.setPointSize(14)
+        header.setFont(hfont)
+        layout.addWidget(header)
+
+        # Stats row
+        if oui_db and oui_db.is_loaded:
+            stats_text = f"{oui_db.vendor_count} OUI entries  |  {oui_db.unique_vendor_count} unique vendors  |  Source: IEEE"
+        else:
+            stats_text = "Database not loaded"
+        stats_label = QLabel(stats_text)
+        stats_label.setStyleSheet("color: #999999; font-size: 9pt;")
+        layout.addWidget(stats_label)
+
+        # Search bar
+        search_layout = QHBoxLayout()
+        search_label = QLabel("Search:")
+        search_label.setStyleSheet("font-size: 10pt;")
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Filter by OUI prefix or vendor name...")
+        self.search_input.textChanged.connect(self.filter_table)
+        search_layout.addWidget(search_label)
+        search_layout.addWidget(self.search_input)
+        layout.addLayout(search_layout)
+
+        # Table
+        self.table = QTableWidget()
+        self.table.setColumnCount(2)
+        self.table.setHorizontalHeaderLabels(["OUI Prefix", "Vendor / Organization"])
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setAlternatingRowColors(True)
+        self.table.setStyleSheet(self.table.styleSheet() + """
+            QTableWidget {
+                alternate-background-color: #262626;
+            }
+        """)
+
+        # Load data
+        self.all_entries = []
+        if oui_db and oui_db.is_loaded:
+            self.all_entries = oui_db.get_all_entries()
+        self.populate_table(self.all_entries)
+
+        layout.addWidget(self.table)
+
+        # Result count label
+        self.result_label = QLabel(f"Showing {len(self.all_entries)} of {len(self.all_entries)} entries")
+        self.result_label.setStyleSheet("color: #999999; font-size: 9pt;")
+        layout.addWidget(self.result_label)
+
+        # Close button
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.accept)
+        close_btn.setFixedWidth(120)
+        btn_layout.addWidget(close_btn)
+        layout.addLayout(btn_layout)
+
+        self.setLayout(layout)
+        self.resize(650, 550)
+
+    def populate_table(self, entries):
+        """Fill the table with OUI entries."""
+        self.table.setRowCount(len(entries))
+        for row, (prefix, vendor) in enumerate(entries):
+            prefix_item = QTableWidgetItem(prefix)
+            prefix_item.setFont(QFont("Courier New", 9))
+            vendor_item = QTableWidgetItem(vendor)
+            self.table.setItem(row, 0, prefix_item)
+            self.table.setItem(row, 1, vendor_item)
+
+    def filter_table(self, text):
+        """Filter table based on search text."""
+        if not text.strip():
+            filtered = self.all_entries
+        else:
+            query = text.strip().upper()
+            filtered = [
+                (prefix, vendor) for prefix, vendor in self.all_entries
+                if query in prefix.upper().replace(':', '') or query in prefix.upper() or query in vendor.upper()
+            ]
+        self.populate_table(filtered)
+        self.result_label.setText(f"Showing {len(filtered)} of {len(self.all_entries)} entries")
+
+
+# --- OUI Download Progress Dialog ---
+class OUIDownloadDialog(QDialog):
+    """Modal dialog showing OUI database download progress."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("OUI Database Update")
+        self.setModal(True)
+        self._success = False
+        self._error_msg = None
+
+        try:
+            icon_path = get_icon_path()
+            self.setWindowIcon(QIcon(icon_path))
+        except:
+            pass
+
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #2b2b2b;
+                color: #ffffff;
+            }
+            QLabel {
+                color: #e0e0e0;
+            }
+            QProgressBar {
+                background-color: #3c3c3c;
+                border: 1px solid #555555;
+                border-radius: 4px;
+                text-align: center;
+                color: #ffffff;
+                font-size: 8pt;
+            }
+            QProgressBar::chunk {
+                background-color: #0078d4;
+                border-radius: 3px;
+            }
+            QPushButton {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 5px 12px;
+                font-size: 9pt;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1084d8;
+            }
+        """)
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(8)
+
+        # Header
+        header = QLabel("Updating OUI Database")
+        hfont = header.font()
+        hfont.setBold(True)
+        hfont.setPointSize(11)
+        header.setFont(hfont)
+        layout.addWidget(header)
+
+        # Source info
+        source_label = QLabel("Source: standards-oui.ieee.org")
+        source_label.setStyleSheet("color: #999999; font-size: 8pt;")
+        layout.addWidget(source_label)
+
+        # Status message
+        self.status_label = QLabel("Preparing download...")
+        self.status_label.setStyleSheet("font-size: 9pt;")
+        layout.addWidget(self.status_label)
+
+        # Progress bar (indeterminate)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 0)  # Indeterminate
+        self.progress_bar.setFixedHeight(20)
+        layout.addWidget(self.progress_bar)
+
+        # Result label (hidden initially)
+        self.result_label = QLabel("")
+        self.result_label.setWordWrap(True)
+        self.result_label.setVisible(False)
+        layout.addWidget(self.result_label)
+
+        # Close button (hidden initially)
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        self.close_btn = QPushButton("Close")
+        self.close_btn.clicked.connect(self.accept)
+        self.close_btn.setVisible(False)
+        btn_layout.addWidget(self.close_btn)
+        layout.addLayout(btn_layout)
+
+        self.setLayout(layout)
+        self.setFixedWidth(380)
+        self.adjustSize()
+
+        # Poll progress queue
+        self._poll_timer = QTimer()
+        self._poll_timer.timeout.connect(self._poll_progress)
+        self._poll_timer.start(100)
+
+        # Start download in background thread
+        self._start_download()
+
+    def _start_download(self):
+        """Start OUI download in background thread."""
+        def worker():
+            import datetime
+            if not oui_db:
+                oui_download_progress_queue.put({'status': 'error', 'message': 'OUI database not initialized'})
+                return
+
+            def progress_cb(msg):
+                if isinstance(msg, dict):
+                    # Chunked progress update with bytes info
+                    oui_download_progress_queue.put({
+                        'status': 'downloading',
+                        'bytes_downloaded': msg['bytes_downloaded'],
+                        'total_bytes': msg['total_bytes']
+                    })
+                else:
+                    oui_download_progress_queue.put({'status': 'progress', 'message': msg})
+
+            oui_download_progress_queue.put({'status': 'progress', 'message': 'Connecting to IEEE...'})
+            success, error = oui_db.download(progress_callback=progress_cb)
+
+            if success:
+                # Record download time
+                settings['oui_last_downloaded'] = datetime.datetime.now().isoformat()
+                save_settings(settings)
+
+                oui_download_progress_queue.put({'status': 'progress', 'message': 'Loading database into memory...'})
+                load_ok, result = oui_db.load()
+                if load_ok:
+                    oui_download_progress_queue.put({
+                        'status': 'done',
+                        'message': f'Database updated successfully!\n{result} OUI entries loaded.\nFile: {oui_db.oui_path}\nSize: {oui_db.file_size_display}'
+                    })
+                else:
+                    oui_download_progress_queue.put({
+                        'status': 'error',
+                        'message': f'Download succeeded but load failed: {result}'
+                    })
+            else:
+                oui_download_progress_queue.put({
+                    'status': 'error',
+                    'message': f'Download failed: {error}'
+                })
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+
+    def _poll_progress(self):
+        """Poll download progress queue."""
+        try:
+            msg = oui_download_progress_queue.get_nowait()
+        except queue.Empty:
+            return
+
+        status = msg['status']
+
+        if status == 'downloading':
+            # Percentage-based progress update
+            downloaded = msg['bytes_downloaded']
+            total = msg['total_bytes']
+            if total > 0:
+                pct = int(downloaded * 100 / total)
+                self.progress_bar.setRange(0, 100)
+                self.progress_bar.setValue(pct)
+                mb_down = downloaded / (1024 * 1024)
+                mb_total = total / (1024 * 1024)
+                self.status_label.setText(f"Downloading... {mb_down:.1f} / {mb_total:.1f} MB ({pct}%)")
+            return
+        elif status == 'progress':
+            self.status_label.setText(msg['message'])
+        elif status == 'done':
+            self._success = True
+            self.status_label.setText("Download complete!")
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(100)
+            self.result_label.setText(msg['message'])
+            self.result_label.setStyleSheet("color: #4caf50; font-size: 9pt;")
+            self.result_label.setVisible(True)
+            self.close_btn.setVisible(True)
+            self._poll_timer.stop()
+        elif status == 'error':
+            self._success = False
+            self._error_msg = msg['message']
+            self.status_label.setText("Update failed")
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(0)
+            self.result_label.setText(msg['message'])
+            self.result_label.setStyleSheet("color: #d32f2f; font-size: 9pt;")
+            self.result_label.setVisible(True)
+            self.close_btn.setVisible(True)
+            self._poll_timer.stop()
+
+    def closeEvent(self, event):
+        if hasattr(self, '_poll_timer'):
+            self._poll_timer.stop()
+        super().closeEvent(event)
+
 
 # --- Settings Dialog ---
 class SettingsDialog(QDialog):
@@ -367,30 +805,30 @@ class SettingsDialog(QDialog):
             }
             QLabel {
                 color: #e0e0e0;
-                font-size: 11pt;
+                font-size: 9pt;
             }
             QLineEdit, QSpinBox {
                 background-color: #3c3c3c;
                 color: #ffffff;
                 border: 1px solid #555555;
                 border-radius: 4px;
-                padding: 6px;
-                font-size: 10pt;
+                padding: 4px;
+                font-size: 9pt;
             }
             QLineEdit:focus, QSpinBox:focus {
                 border: 1px solid #0078d4;
             }
             QCheckBox {
                 color: #e0e0e0;
-                font-size: 10pt;
+                font-size: 9pt;
             }
             QPushButton {
                 background-color: #0078d4;
                 color: white;
                 border: none;
                 border-radius: 4px;
-                padding: 8px 16px;
-                font-size: 10pt;
+                padding: 5px 12px;
+                font-size: 9pt;
                 font-weight: bold;
             }
             QPushButton:hover {
@@ -406,9 +844,10 @@ class SettingsDialog(QDialog):
                 color: #ffffff;
                 border: 1px solid #555555;
                 border-radius: 6px;
-                margin-top: 12px;
+                margin-top: 10px;
+                padding-top: 14px;
                 font-weight: bold;
-                font-size: 11pt;
+                font-size: 9pt;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
@@ -417,16 +856,28 @@ class SettingsDialog(QDialog):
             }
         """)
 
+        outer_layout = QVBoxLayout()
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        # Scroll area for all content
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QScrollArea.NoFrame)
+        scroll_area.setStyleSheet("QScrollArea { background-color: #2b2b2b; border: none; }")
+
+        scroll_widget = QWidget()
+        scroll_widget.setStyleSheet("QWidget { background-color: #2b2b2b; }")
         main_layout = QVBoxLayout()
-        main_layout.setSpacing(15)
-        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(20, 15, 20, 15)
 
         # Header with icon and title
         header_layout = QHBoxLayout()
         try:
             icon_path = get_icon_path()
             pixmap = QPixmap(icon_path)
-            scaled_pixmap = pixmap.scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            scaled_pixmap = pixmap.scaled(36, 36, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             icon_label = QLabel()
             icon_label.setPixmap(scaled_pixmap)
             header_layout.addWidget(icon_label)
@@ -435,7 +886,7 @@ class SettingsDialog(QDialog):
 
         header_text = QLabel("Settings")
         header_font = QFont()
-        header_font.setPointSize(16)
+        header_font.setPointSize(14)
         header_font.setBold(True)
         header_text.setFont(header_font)
         header_layout.addWidget(header_text)
@@ -452,7 +903,7 @@ class SettingsDialog(QDialog):
         self.hotkey_input.setPlaceholderText("e.g., alt+shift+m, ctrl+shift+c")
 
         hotkey_hint = QLabel("Note: Hotkey change requires app restart")
-        hotkey_hint.setStyleSheet("color: #999999; font-size: 9pt; font-style: italic;")
+        hotkey_hint.setStyleSheet("color: #999999; font-size: 8pt; font-style: italic;")
 
         hotkey_layout.addWidget(hotkey_label)
         hotkey_layout.addWidget(self.hotkey_input)
@@ -485,10 +936,79 @@ class SettingsDialog(QDialog):
         startup_group.setLayout(startup_layout)
         main_layout.addWidget(startup_group)
 
+        # OUI Vendor Lookup Group
+        oui_group = QGroupBox("OUI Vendor Lookup")
+        oui_layout = QVBoxLayout()
+
+        self.oui_enabled_checkbox = QCheckBox("Enable vendor lookup (press Enter in format popup)")
+        self.oui_enabled_checkbox.setChecked(settings.get('oui_enabled', True))
+        oui_layout.addWidget(self.oui_enabled_checkbox)
+
+        self.oui_auto_update_checkbox = QCheckBox("Auto-update OUI database when outdated")
+        self.oui_auto_update_checkbox.setChecked(settings.get('oui_auto_update', True))
+        oui_layout.addWidget(self.oui_auto_update_checkbox)
+
+        update_interval_label = QLabel("Update interval (days):")
+        self.oui_interval_spinbox = QSpinBox()
+        self.oui_interval_spinbox.setRange(1, 90)
+        self.oui_interval_spinbox.setValue(settings.get('oui_update_interval_days', 7))
+        oui_layout.addWidget(update_interval_label)
+        oui_layout.addWidget(self.oui_interval_spinbox)
+
+        vendor_timeout_label = QLabel("Vendor popup timeout (seconds):")
+        self.oui_vendor_timeout_spinbox = QSpinBox()
+        self.oui_vendor_timeout_spinbox.setRange(1, 30)
+        self.oui_vendor_timeout_spinbox.setValue(settings.get('oui_vendor_timeout', 5))
+        oui_layout.addWidget(vendor_timeout_label)
+        oui_layout.addWidget(self.oui_vendor_timeout_spinbox)
+
+        # Database file location
+        if oui_db:
+            db_path_label = QLabel(f"Location: {oui_db.oui_path}")
+            db_path_label.setStyleSheet("color: #888888; font-size: 7pt; font-family: 'Courier New';")
+            db_path_label.setWordWrap(True)
+            db_path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            oui_layout.addWidget(db_path_label)
+
+        # Database status info
+        if oui_db and oui_db.is_loaded:
+            db_info = f"{oui_db.vendor_count} entries  •  {oui_db.file_size_display}  •  {oui_db.last_modified_display}"
+            oui_info_label = QLabel(db_info)
+        else:
+            oui_info_label = QLabel("Database: Not loaded")
+        oui_info_label.setStyleSheet("color: #999999; font-size: 8pt; font-style: italic;")
+        oui_layout.addWidget(oui_info_label)
+
+        # Buttons row: Update Now + View Database
+        oui_btn_layout = QHBoxLayout()
+        oui_btn_layout.setContentsMargins(0, 4, 0, 4)
+
+        update_btn = QPushButton("Update")
+        update_btn.clicked.connect(self.manual_oui_update)
+        oui_btn_layout.addWidget(update_btn)
+
+        view_btn = QPushButton("View")
+        view_btn.clicked.connect(self.view_oui_database)
+        if not (oui_db and oui_db.is_loaded):
+            view_btn.setEnabled(False)
+            view_btn.setToolTip("Database not loaded")
+        oui_btn_layout.addWidget(view_btn)
+
+        oui_btn_layout.addStretch()
+        oui_layout.addLayout(oui_btn_layout)
+
+        oui_group.setLayout(oui_layout)
+        main_layout.addWidget(oui_group)
+
         main_layout.addStretch()
 
-        # Buttons
+        scroll_widget.setLayout(main_layout)
+        scroll_area.setWidget(scroll_widget)
+        outer_layout.addWidget(scroll_area)
+
+        # Buttons (outside scroll area, always visible at bottom)
         button_layout = QHBoxLayout()
+        button_layout.setContentsMargins(20, 8, 20, 12)
         button_layout.addStretch()
 
         cancel_button = QPushButton("Cancel")
@@ -500,18 +1020,32 @@ class SettingsDialog(QDialog):
 
         button_layout.addWidget(cancel_button)
         button_layout.addWidget(save_button)
-        main_layout.addLayout(button_layout)
+        outer_layout.addLayout(button_layout)
 
-        self.setLayout(main_layout)
-        self.setFixedWidth(500)
+        self.setLayout(outer_layout)
+        self.setFixedSize(480, 620)
 
     def save_settings(self):
         """Save settings and close dialog."""
         settings['hotkey'] = self.hotkey_input.text().strip()
         settings['notification_duration'] = self.duration_spinbox.value()
         settings['autostart'] = self.autostart_checkbox.isChecked()
+        settings['oui_enabled'] = self.oui_enabled_checkbox.isChecked()
+        settings['oui_auto_update'] = self.oui_auto_update_checkbox.isChecked()
+        settings['oui_update_interval_days'] = self.oui_interval_spinbox.value()
+        settings['oui_vendor_timeout'] = self.oui_vendor_timeout_spinbox.value()
         save_settings(settings)
         self.accept()
+
+    def manual_oui_update(self):
+        """Launch manual OUI database update with progress dialog."""
+        dlg = OUIDownloadDialog(self)
+        dlg.exec_()
+
+    def view_oui_database(self):
+        """Open the OUI database viewer dialog."""
+        dlg = OUIViewerDialog(self)
+        dlg.exec_()
 
 def show_settings_dialog():
     """Show settings dialog in main Qt thread."""
@@ -526,11 +1060,12 @@ class FormatSelectorPopup(QDialog):
     Auto-closes after configured duration or when user clicks a format.
     """
 
-    def __init__(self, formats, current_index, duration_seconds):
+    def __init__(self, formats, current_index, duration_seconds, mac_normalized=None):
         super().__init__(None)
         self.formats = formats
         self.current_index = current_index
         self.duration_seconds = duration_seconds
+        self.mac_normalized = mac_normalized
 
         # Window setup
         self.setWindowTitle("MAC Converter")
@@ -540,7 +1075,7 @@ class FormatSelectorPopup(QDialog):
         except:
             pass  # Ignore if icon not found
 
-        # Window flags: always on top, tool window, no frame
+        # Window flags: always on top, tool window (no taskbar entry)
         self.setWindowFlags(
             self.windowFlags() |
             Qt.WindowStaysOnTopHint |
@@ -640,6 +1175,17 @@ class FormatSelectorPopup(QDialog):
 
                 layout.addWidget(fmt_label)
 
+        # OUI vendor lookup hint (only shown when OUI is enabled and loaded)
+        if settings.get('oui_enabled', True) and oui_db and oui_db.is_loaded:
+            oui_hint = QLabel("Press Enter for vendor lookup")
+            oui_hint_font = oui_hint.font()
+            oui_hint_font.setPointSize(10)
+            oui_hint_font.setBold(True)
+            oui_hint.setFont(oui_hint_font)
+            oui_hint.setStyleSheet("color: #0078d4; padding: 6px; background-color: #e8f0fe; border-radius: 4px;")
+            oui_hint.setAlignment(Qt.AlignCenter)
+            layout.addWidget(oui_hint)
+
         layout.addStretch()
         self.setLayout(layout)
 
@@ -655,6 +1201,28 @@ class FormatSelectorPopup(QDialog):
 
         # Position near bottom-right (near system tray)
         self.position_near_tray()
+
+        # Start global Enter key listener (pynput-based, works regardless of focus)
+        self._enter_listener = None
+        if (self.mac_normalized
+                and settings.get('oui_enabled', True)
+                and oui_db and oui_db.is_loaded):
+            self._start_enter_listener()
+
+    def _start_enter_listener(self):
+        """Start a temporary global keyboard listener for Enter key."""
+        def on_press(key):
+            try:
+                if key == keyboard.Key.enter:
+                    # Queue vendor lookup request (thread-safe)
+                    vendor_lookup_request_queue.put({
+                        'mac_normalized': self.mac_normalized
+                    })
+                    return False  # Stop this listener
+            except Exception:
+                pass
+        self._enter_listener = keyboard.Listener(on_press=on_press)
+        self._enter_listener.start()
 
     def position_near_tray(self):
         """Position the popup near the system tray (bottom-right corner)."""
@@ -688,10 +1256,206 @@ class FormatSelectorPopup(QDialog):
         self.close()
 
     def closeEvent(self, event):
-        """Stop timer when closing."""
+        """Stop timer and Enter listener when closing."""
         if hasattr(self, 'auto_close_timer'):
             self.auto_close_timer.stop()
+        if hasattr(self, '_enter_listener') and self._enter_listener:
+            try:
+                self._enter_listener.stop()
+            except Exception:
+                pass
+            self._enter_listener = None
         super().closeEvent(event)
+
+# --- Vendor Lookup Popup ---
+class VendorPopup(QDialog):
+    """
+    Non-modal popup that displays OUI vendor information for a MAC address.
+    Shows vendor name with option to copy to clipboard.
+    Auto-closes after countdown without copying vendor.
+    """
+
+    def __init__(self, vendor_name, mac_normalized, duration_seconds):
+        super().__init__(None)
+        self.vendor_name = vendor_name
+        self.mac_normalized = mac_normalized
+        self.duration_seconds = duration_seconds
+        self.remaining_seconds = duration_seconds
+        self.vendor_copied = False
+
+        self.setWindowTitle("MAC Converter - Vendor Lookup")
+        try:
+            icon_path = get_icon_path()
+            self.setWindowIcon(QIcon(icon_path))
+        except:
+            pass
+
+        self.setWindowFlags(
+            self.windowFlags() |
+            Qt.WindowStaysOnTopHint |
+            Qt.Tool
+        )
+
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #2b2b2b;
+                color: #ffffff;
+            }
+            QLabel {
+                color: #e0e0e0;
+            }
+            QPushButton {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 16px;
+                font-size: 10pt;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1084d8;
+            }
+        """)
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(8)
+
+        # Header with icon
+        header_layout = QHBoxLayout()
+        try:
+            icon_path = get_icon_path()
+            pixmap = QPixmap(icon_path)
+            scaled = pixmap.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            icon_label = QLabel()
+            icon_label.setPixmap(scaled)
+            header_layout.addWidget(icon_label)
+        except:
+            pass
+
+        header_title = QLabel("Vendor Lookup")
+        hfont = header_title.font()
+        hfont.setBold(True)
+        hfont.setPointSize(11)
+        header_title.setFont(hfont)
+        header_layout.addWidget(header_title)
+        header_layout.addStretch()
+        layout.addLayout(header_layout)
+
+        # Separator
+        sep = QLabel()
+        sep.setStyleSheet("border-bottom: 1px solid #555555;")
+        sep.setFixedHeight(6)
+        layout.addWidget(sep)
+
+        # OUI prefix label
+        prefix = mac_normalized[:6].upper()
+        prefix_display = ':'.join(prefix[i:i+2] for i in range(0, 6, 2))
+        prefix_label = QLabel(f"OUI Prefix: {prefix_display}")
+        prefix_label.setStyleSheet("color: #999999; font-size: 9pt;")
+        layout.addWidget(prefix_label)
+
+        # Vendor name (large, prominent)
+        display_name = vendor_name if vendor_name else "Unknown vendor"
+        vendor_label = QLabel(display_name)
+        vfont = vendor_label.font()
+        vfont.setBold(True)
+        vfont.setPointSize(14)
+        vendor_label.setFont(vfont)
+        if not vendor_name:
+            vendor_label.setStyleSheet("color: #d32f2f; font-weight: bold; font-size: 14pt;")
+        else:
+            vendor_label.setStyleSheet("color: #4caf50; font-weight: bold; font-size: 14pt;")
+        vendor_label.setWordWrap(True)
+        layout.addWidget(vendor_label)
+
+        layout.addSpacing(10)
+
+        # Copy button + timer row
+        button_row = QHBoxLayout()
+
+        if vendor_name:
+            copy_btn = QPushButton("Copy to Clipboard")
+            copy_btn.clicked.connect(self.copy_vendor)
+            button_row.addWidget(copy_btn)
+
+        button_row.addStretch()
+
+        # Countdown label
+        self.timer_label = QLabel(f"{self.remaining_seconds}s")
+        self.timer_label.setStyleSheet("color: #999999; font-size: 9pt;")
+        button_row.addWidget(self.timer_label)
+
+        layout.addLayout(button_row)
+        self.setLayout(layout)
+        self.setFixedWidth(350)
+        self.adjustSize()
+
+        # Position near tray
+        self.position_near_tray()
+
+        # Ensure keyboard focus
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.activateWindow()
+        self.raise_()
+
+        # Countdown timer (1-second ticks)
+        self.countdown_timer = QTimer()
+        self.countdown_timer.timeout.connect(self.tick)
+        self.countdown_timer.start(1000)
+
+    def position_near_tray(self):
+        """Position the popup near the system tray (bottom-right corner)."""
+        try:
+            screen_geom = QApplication.desktop().screenGeometry()
+            x = screen_geom.width() - self.width() - 20
+            y = screen_geom.height() - self.height() - 20
+            self.move(x, y)
+        except:
+            pass
+
+    def tick(self):
+        """Countdown tick. Auto-close when reaching 0."""
+        self.remaining_seconds -= 1
+        if self.remaining_seconds <= 0:
+            self.close()
+        else:
+            self.timer_label.setText(f"{self.remaining_seconds}s")
+
+    def copy_vendor(self):
+        """Copy vendor name to clipboard and close."""
+        if self.vendor_name:
+            pyperclip.copy(self.vendor_name)
+            self.vendor_copied = True
+        self.close()
+
+    def closeEvent(self, event):
+        """Clean up timer on close."""
+        if hasattr(self, 'countdown_timer'):
+            self.countdown_timer.stop()
+        super().closeEvent(event)
+
+    def keyPressEvent(self, event):
+        """Escape closes the popup."""
+        if event.key() == Qt.Key_Escape:
+            self.close()
+        else:
+            super().keyPressEvent(event)
+
+
+def show_vendor_popup(vendor_name, mac_normalized, duration_seconds):
+    """Show vendor lookup popup. Replaces any existing vendor popup."""
+    global current_vendor_popup
+    if current_vendor_popup is not None:
+        try:
+            current_vendor_popup.close()
+        except:
+            pass
+        current_vendor_popup = None
+    current_vendor_popup = VendorPopup(vendor_name, mac_normalized, duration_seconds)
+    current_vendor_popup.show()
+
 
 # --- Tray Menu ---
 def tray_app():
@@ -790,7 +1554,12 @@ DEFAULT_SETTINGS = {
     'notification_duration': 3,          # Notification display seconds
     'author': 'Alejandro Lichtenfeld',   # Correct author name
     'license': 'MIT',
-    'about': 'MAC Address Converter Utility v2.2.0\nAuthor: Alejandro Lichtenfeld\nLicense: MIT\nhttps://github.com/aleled/mac-converter-2'
+    'about': 'MAC Address Converter Utility v2.3.0\nAuthor: Alejandro Lichtenfeld\nLicense: MIT\nhttps://github.com/aleled/mac-converter-2',
+    'oui_enabled': True,                 # Enable OUI vendor lookup
+    'oui_auto_update': True,             # Auto-download OUI database when stale
+    'oui_update_interval_days': 7,       # Days before OUI database is considered stale
+    'oui_vendor_timeout': 5,             # Vendor popup countdown (seconds)
+    'oui_last_downloaded': None,         # ISO timestamp of last successful download
 }
 
 def load_settings():
@@ -821,8 +1590,9 @@ def main():
     """
     Main entry point. Starts the Qt application, tray icon, and hotkey listener. Runs the event loop.
     """
-    global listener
+    global listener, oui_db
     app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)  # Don't exit when dialogs close; tray manages lifecycle
 
     # Start tray icon in background thread
     t = threading.Thread(target=tray_app, daemon=True)
@@ -835,6 +1605,48 @@ def main():
 
     # Start hotkey listener
     listener = listen_hotkey(app)
+
+    # Initialize OUI database (background thread)
+    if settings.get('oui_enabled', True):
+        oui_db = OUIDatabase(
+            data_dir=SETTINGS_DIR,
+            update_interval_days=settings.get('oui_update_interval_days', 7)
+        )
+
+        def oui_init_worker():
+            """Background thread: download if stale, then load into memory."""
+            import datetime
+            if settings.get('oui_auto_update', True) and oui_db.is_stale:
+                def progress_cb(msg):
+                    if isinstance(msg, dict):
+                        return  # Skip chunked progress for startup (no UI)
+                    oui_status_queue.put({'type': 'info', 'message': msg})
+
+                success, error = oui_db.download(progress_callback=progress_cb)
+                if success:
+                    settings['oui_last_downloaded'] = datetime.datetime.now().isoformat()
+                    save_settings(settings)
+                else:
+                    oui_status_queue.put({
+                        'type': 'error',
+                        'message': f"OUI update failed: {error}"
+                    })
+
+            # Load database (even if download failed, try existing file)
+            success, result = oui_db.load()
+            if success:
+                oui_status_queue.put({
+                    'type': 'info',
+                    'message': f"OUI database loaded: {result} vendors"
+                })
+            else:
+                oui_status_queue.put({
+                    'type': 'error',
+                    'message': f"OUI database unavailable: {result}"
+                })
+
+        oui_thread = threading.Thread(target=oui_init_worker, daemon=True)
+        oui_thread.start()
 
     # Add QTimer for About dialog
     def poll_about_dialog():
@@ -872,7 +1684,8 @@ def main():
                 app,
                 request['formats'],
                 request['current_index'],
-                request['duration']
+                request['duration'],
+                request.get('mac_normalized')
             )
         elif request['type'] == 'error':
             show_error_popup(
@@ -884,6 +1697,47 @@ def main():
     format_timer = QTimer()
     format_timer.timeout.connect(poll_format_popup)
     format_timer.start(50)  # Poll more frequently for responsive UI
+
+    # Add QTimer for vendor lookup requests (Enter key from global listener)
+    def poll_vendor_lookup():
+        try:
+            request = vendor_lookup_request_queue.get_nowait()
+        except queue.Empty:
+            return
+        mac = request['mac_normalized']
+        # Close the format popup
+        if current_format_popup is not None:
+            try:
+                current_format_popup.close()
+            except Exception:
+                pass
+        vendor_name = oui_db.lookup(mac) if oui_db and oui_db.is_loaded else None
+        duration = settings.get('oui_vendor_timeout', 5)
+        show_vendor_popup(vendor_name, mac, duration)
+
+    vendor_timer = QTimer()
+    vendor_timer.timeout.connect(poll_vendor_lookup)
+    vendor_timer.start(50)
+
+    # Add QTimer for OUI status notifications
+    def poll_oui_status():
+        try:
+            msg = oui_status_queue.get_nowait()
+        except queue.Empty:
+            return
+        if tray_icon and tray_icon_ready.is_set():
+            try:
+                tray_icon.notify(
+                    title="MAC Converter",
+                    message=msg['message']
+                )
+            except Exception:
+                pass
+        print(f"[OUI] {msg.get('type', 'info').upper()}: {msg['message']}")
+
+    oui_status_timer = QTimer()
+    oui_status_timer.timeout.connect(poll_oui_status)
+    oui_status_timer.start(500)
 
     app.exec_()
     if listener:

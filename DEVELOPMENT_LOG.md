@@ -213,4 +213,40 @@
 
 ---
 
+## 2026-02-17: v2.3.0 - OUI Vendor Lookup Feature
+
+### Session Summary
+- Implemented OUI vendor lookup feature — the major new feature for v2.3.0
+- Created standalone `oui_lookup.py` module with thread-safe download, parse, and lookup
+- IEEE OUI database (~3.5 MB CSV, ~38,900 vendor entries, ~19,885 unique vendors)
+
+### New Features
+- **Vendor Lookup**: Press Enter in format popup to identify MAC manufacturer via OUI prefix
+- **Vendor Popup**: Dark-themed popup with vendor name, OUI prefix, countdown timer, and copy button
+- **Database Management**: Manual update with real-time percentage progress bar (MB/MB, %)
+- **Database Viewer**: Searchable read-only table dialog for browsing all 38,900+ OUI entries
+- **Settings**: New OUI section with enable/disable, auto-update toggle, interval (1-90 days), vendor timeout
+- **About Dialog**: OUI database stats (entries, unique vendors, file size, download time, location)
+
+### Bug Fixes
+- Fixed app exiting when Settings or About dialogs were closed (`setQuitOnLastWindowClosed(False)`)
+- Fixed dark theme not applying inside QScrollArea in Settings dialog
+- Fixed QGroupBox content clipping (buttons/text cut off at borders)
+- Multiple rounds of layout fixes for font sizes, margins, and padding
+
+### Technical Details
+- `oui_lookup.py`: Standalone module, no Qt dependency, stdlib-only (urllib, csv, threading)
+- OUI CSV stored at `%APPDATA%/mac-converter-2/oui.csv`
+- Download uses chunked reads (16KB) with progress callback (supports both string and dict messages)
+- Global Enter key detection via temporary pynput listener (runs only while format popup is visible)
+- Thread-safe communication via `queue.Queue` objects polled by `QTimer` instances
+
+### Build
+- Built executable with PyInstaller: `dist/MAC-Converter.exe` (~48 MB)
+- Built installer with Inno Setup v6.5.4: `installer-output/MAC-Converter-Setup-v2.3.0.exe` (~51 MB)
+- Cleaned up old files (removed empty `clipboard_hotkey_fixed.py`, old installers)
+- Updated all documentation (CHANGELOG.md, README.md, TODO.md, DEVELOPMENT_LOG.md)
+
+---
+
 Each session will be logged here with a summary of work done, pending tasks, and next steps.

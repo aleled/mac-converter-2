@@ -1,7 +1,7 @@
 # TODO / Feature Tracker
 
-**Current Version:** 2.2.0 (Production Ready)
-**Last Updated:** 2025-12-31
+**Current Version:** 2.3.0 (Production Ready)
+**Last Updated:** 2026-02-17
 
 ---
 
@@ -74,7 +74,23 @@
 
 ---
 
-## Current Release (v2.2.0)
+### ✅ Milestone 10: OUI Vendor Lookup (v2.3.0)
+- [x] IEEE OUI database integration (~38,900 vendor entries)
+- [x] Background download with auto-update when stale
+- [x] Vendor lookup via Enter key in format popup
+- [x] Vendor popup with countdown timer and copy-to-clipboard
+- [x] Manual OUI update with real-time percentage progress bar
+- [x] Searchable OUI database viewer (read-only table)
+- [x] OUI settings: enable/disable, auto-update, interval, timeout
+- [x] Database stats in About dialog
+- [x] New standalone module `oui_lookup.py`
+- [x] Fixed app exit on dialog close (setQuitOnLastWindowClosed)
+- [x] Fixed dark theme in scrollable Settings dialog
+- [x] Updated installer to v2.3.0
+
+---
+
+## Current Release (v2.3.0)
 
 **Status:** Production Ready ✅
 
@@ -83,21 +99,24 @@
 - ✅ Configurable global hotkey (no admin required)
 - ✅ Tray notifications with duration control
 - ✅ Dark theme UI with professional styling
-- ✅ Settings dialog (hotkey, duration, autostart)
-- ✅ About dialog with app info and GitHub link
+- ✅ Settings dialog (hotkey, duration, autostart, OUI options)
+- ✅ About dialog with app info, GitHub link, and OUI database stats
+- ✅ OUI vendor lookup with IEEE database (~38,900 vendors)
+- ✅ Manual OUI update with percentage progress bar
+- ✅ Searchable OUI database viewer
 - ✅ Persistent settings storage
 - ✅ Windows installer package
 - ✅ Standalone executable
 - ✅ Clean, production-ready codebase
 
 ### Build Artifacts
-- Standalone executable: `dist/MAC-Converter.exe` (55 MB)
-- Windows installer: `installer-output/MAC-Converter-Setup-v2.2.0.exe` (58 MB)
+- Standalone executable: `dist/MAC-Converter.exe` (~48 MB)
+- Windows installer: `installer-output/MAC-Converter-Setup-v2.3.0.exe` (~51 MB)
 - Source code: All files cleaned and optimized
 
 ---
 
-## Future Enhancements (v2.3.0+)
+## Future Enhancements (v2.4.0+)
 
 ### Potential Features
 - [ ] Tray history of recent conversions
@@ -135,6 +154,7 @@
 - **No Batch Processing**: One MAC address at a time
 - **No History**: Previous conversions not stored
 - **No Update Mechanism**: Manual updates via GitHub
+- **OUI Database**: Requires internet for initial download (~3.5 MB from IEEE)
 
 ---
 
@@ -148,33 +168,24 @@
 
 ---
 
-## Recent Changes (Session: 2025-12-31)
+## Recent Changes (Session: 2026-02-17)
 
 ### What Was Done
-- ✅ Built production Windows installer using PyInstaller and Inno Setup
-- ✅ Created standalone executable (55 MB)
-- ✅ Generated installer package (58 MB)
-- ✅ Cleaned up temporary development files
-- ✅ Updated .gitignore with build artifacts
-- ✅ Added LICENSE.txt and mac-converter.spec to git
-- ✅ Pushed all changes to GitHub (dev branch)
-- ✅ Updated documentation (README.md, DEVELOPMENT_LOG.md)
+- ✅ Implemented OUI vendor lookup feature (IEEE database, ~38,900 vendors)
+- ✅ Created `oui_lookup.py` standalone module
+- ✅ Added vendor popup with countdown, copy-to-clipboard, auto-close
+- ✅ Added manual OUI update with real-time percentage progress bar
+- ✅ Added searchable OUI database viewer (38,900+ entries)
+- ✅ Enhanced Settings dialog with OUI section (scroll area, dark theme fix)
+- ✅ Enhanced About dialog with OUI database statistics
+- ✅ Fixed app exit bug when closing dialogs (setQuitOnLastWindowClosed)
+- ✅ Built v2.3.0 executable and installer
+- ✅ Cleaned up old files and updated all documentation
 
 ### Current Project State
-- All milestones through v2.2.0 completed
+- All milestones through v2.3.0 completed
 - Production-ready releases available
-- GitHub repository up to date
 - Code is clean, documented, and tested
-
----
-
-## Next Session Tasks (Optional)
-
-- [ ] Create GitHub release with installer and executable downloads
-- [ ] Create installation guide for end users
-- [ ] Monitor user feedback from initial release
-- [ ] Plan v2.3.0 features based on feedback
-- [ ] Update TODO items as new requirements emerge
 
 ---
 
@@ -194,7 +205,7 @@ pyinstaller mac-converter.spec
 ### Build Installer
 ```bash
 "C:\Program Files (x86)\Inno Setup 6\iscc.exe" installer.iss
-# Output: installer-output/MAC-Converter-Setup-v2.2.0.exe
+# Output: installer-output/MAC-Converter-Setup-v2.3.0.exe
 ```
 
 ---
@@ -221,6 +232,6 @@ pyinstaller mac-converter.spec
 
 ---
 
-**Last Updated:** 2025-12-31
+**Last Updated:** 2026-02-17
 **Maintained By:** Alejandro Lichtenfeld
 **Repository:** https://github.com/aleled/mac-converter-2

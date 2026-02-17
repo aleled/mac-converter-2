@@ -5,6 +5,29 @@
 
 # Changelog
 
+## [2.3.0] - 2026-02-17
+### Added
+- OUI vendor lookup: press Enter in format popup to identify MAC address manufacturer
+- IEEE OUI database integration (~38,900 vendor entries from standards-oui.ieee.org)
+- Vendor popup with countdown timer, copy-to-clipboard button, and auto-close
+- Background OUI database download with auto-update when stale (configurable interval)
+- Manual OUI database update with real-time percentage progress bar (MB downloaded / total)
+- OUI database viewer: searchable, read-only table of all 38,900+ OUI entries
+- OUI settings section: enable/disable, auto-update toggle, update interval, vendor popup timeout
+- Database info in About dialog: entry count, unique vendors, file size, download timestamp, location
+- New module `oui_lookup.py`: standalone thread-safe OUI database with download, parse, and lookup
+
+### Changed
+- Format popup now shows "Press Enter for vendor lookup" hint when OUI database is loaded
+- Settings dialog wrapped in scroll area to accommodate new OUI section
+- About dialog expanded with OUI database statistics section
+- Version updated to 2.3.0
+
+### Fixed
+- Settings/About dialogs no longer cause app to exit when closed (setQuitOnLastWindowClosed)
+- Dark theme now properly applies inside scroll areas in Settings dialog
+- QGroupBox content no longer clips at borders (padding-top fix)
+
 ## [2.2.0] - 2025-12-31
 ### Added
 - Auto-cycling MAC format converter: each hotkey press cycles to the next format (0→1→2→...→9→0)
