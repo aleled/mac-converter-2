@@ -1580,21 +1580,79 @@ DEFAULT_SETTINGS = {
     'oui_last_downloaded': None,         # ISO timestamp of last successful download
 }
 
+def _validate_settings(d):
+    """Coerce/clamp a raw settings dict, falling back to DEFAULT_SETTINGS per key.
+
+    Returns a fully populated dict where every value passes type+range checks.
+    Used by load_settings to reject corrupted or hand-edited bad values, and
+    defensively before save to prevent garbage from being persisted.
+    """
+    out = dict(DEFAULT_SETTINGS)
+    if not isinstance(d, dict):
+        return out
+
+    # hotkey: non-empty string
+    if isinstance(d.get("hotkey"), str) and d["hotkey"].strip():
+        out["hotkey"] = d["hotkey"].strip()
+
+    # notification_duration: int in [1, 10]
+    nd = d.get("notification_duration")
+    if isinstance(nd, int) and not isinstance(nd, bool) and 1 <= nd <= 10:
+        out["notification_duration"] = nd
+
+    # autostart: strict bool
+    if isinstance(d.get("autostart"), bool):
+        out["autostart"] = d["autostart"]
+
+    # last_format_index: int in [0, 9]
+    lfi = d.get("last_format_index")
+    if isinstance(lfi, int) and not isinstance(lfi, bool) and 0 <= lfi < 10:
+        out["last_format_index"] = lfi
+
+    # OUI options
+    if isinstance(d.get("oui_enabled"), bool):
+        out["oui_enabled"] = d["oui_enabled"]
+    if isinstance(d.get("oui_auto_update"), bool):
+        out["oui_auto_update"] = d["oui_auto_update"]
+    oui_int = d.get("oui_update_interval_days")
+    if isinstance(oui_int, int) and not isinstance(oui_int, bool) and 1 <= oui_int <= 365:
+        out["oui_update_interval_days"] = oui_int
+    oui_t = d.get("oui_vendor_timeout")
+    if isinstance(oui_t, int) and not isinstance(oui_t, bool) and 1 <= oui_t <= 60:
+        out["oui_vendor_timeout"] = oui_t
+
+    # Last-downloaded timestamp passes through as-is if string
+    if isinstance(d.get("oui_last_downloaded"), str):
+        out["oui_last_downloaded"] = d["oui_last_downloaded"]
+
+    return out
+
+
 def load_settings():
-    if not os.path.exists(SETTINGS_PATH):
-        os.makedirs(SETTINGS_DIR, exist_ok=True)
-        save_settings(DEFAULT_SETTINGS)
-        return DEFAULT_SETTINGS.copy()
+    """Load settings from disk. Returns a fully validated dict.
+
+    On JSON parse failure, renames the corrupt file to
+    settings.json.corrupt-<unix-ts> and returns DEFAULT_SETTINGS.
+    """
+    path = os.path.join(SETTINGS_DIR, SETTINGS_FILENAME)
+    if not os.path.exists(path):
+        return dict(DEFAULT_SETTINGS)
     try:
-        with open(SETTINGS_PATH, 'r', encoding='utf-8') as f:
-            s = json.load(f)
-        # Fill in any missing keys
-        for k, v in DEFAULT_SETTINGS.items():
-            if k not in s:
-                s[k] = v
-        return s
-    except Exception:
-        return DEFAULT_SETTINGS.copy()
+        with open(path, 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+    except json.JSONDecodeError as e:
+        ts = int(time.time())
+        corrupt_path = f"{path}.corrupt-{ts}"
+        try:
+            os.replace(path, corrupt_path)
+        except OSError:
+            pass
+        print(f"[WARN] settings.json corrupt, renamed to {corrupt_path}: {e}", file=sys.stderr)
+        return dict(DEFAULT_SETTINGS)
+    except OSError as e:
+        print(f"[WARN] settings.json unreadable: {e}", file=sys.stderr)
+        return dict(DEFAULT_SETTINGS)
+    return _validate_settings(raw)
 
 def save_settings(settings):
     """Save settings atomically to disk. Thread-safe via _settings_lock."""
