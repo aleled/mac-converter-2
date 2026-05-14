@@ -35,6 +35,23 @@ import time
 from pynput import keyboard
 import json
 
+# --- Atomic settings I/O (Phase 2 fix for F7, F16, F23, F28) ---
+
+_settings_lock = threading.Lock()
+
+
+def _atomic_write_json(path, data):
+    """Write `data` to `path` atomically via temp file + os.replace.
+
+    Caller is responsible for serialization (e.g. holding _settings_lock).
+    Raises OSError on failure; the live file is never partially written.
+    """
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    os.replace(tmp_path, path)
+
+
 # --- Tray Icon Setup ---
 def get_icon_path():
     """
@@ -1546,7 +1563,8 @@ def listen_hotkey(app):
 
 # --- Settings: Load/Save Logic ---
 SETTINGS_DIR = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'mac-converter-2')
-SETTINGS_PATH = os.path.join(SETTINGS_DIR, 'settings.json')
+SETTINGS_FILENAME = 'settings.json'
+SETTINGS_PATH = os.path.join(SETTINGS_DIR, SETTINGS_FILENAME)
 DEFAULT_SETTINGS = {
     'autostart': False,
     'last_format_index': 0,              # Track last used format (0-9)
@@ -1579,9 +1597,11 @@ def load_settings():
         return DEFAULT_SETTINGS.copy()
 
 def save_settings(settings):
+    """Save settings atomically to disk. Thread-safe via _settings_lock."""
     os.makedirs(SETTINGS_DIR, exist_ok=True)
-    with open(SETTINGS_PATH, 'w', encoding='utf-8') as f:
-        json.dump(settings, f, indent=2)
+    path = os.path.join(SETTINGS_DIR, SETTINGS_FILENAME)
+    with _settings_lock:
+        _atomic_write_json(path, settings)
 
 settings = load_settings()
 
