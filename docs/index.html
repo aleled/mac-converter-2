@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Lightweight Windows tray utility for converting MAC addresses between 10 formats with a global hotkey, auto-cycling, and OUI vendor lookup.">
+<title>MAC Address Converter</title>
+<link rel="icon" type="image/png" href="icon-v1.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="container">
+    <header>
+        <img class="app-icon" src="icon-v1.png" alt="MAC Address Converter">
+        <h1>MAC Address Converter</h1>
+        <p class="version-badge" data-version>v2.4.0</p>
+        <p class="tagline">
+            Lightweight Windows tray utility for converting MAC addresses between
+            10 formats &mdash; with a global hotkey, auto-cycling, and IEEE OUI
+            vendor lookup. No admin rights required.
+        </p>
+    </header>
+
+    <section class="cta-section">
+        <a class="download-btn" data-download href="https://github.com/aleled/mac-converter-2" rel="noopener">
+            Download for Windows
+        </a>
+        <p class="cta-sub" data-cta-sub>System requirements: Windows 7 or later.</p>
+    </section>
+
+    <section class="features">
+        <h2>What it does</h2>
+        <ul>
+            <li>Cycles through 10 MAC address formats with one keystroke (default <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>)</li>
+            <li>OUI vendor lookup against the IEEE database (~38,900 vendors)</li>
+            <li>Runs from the system tray — no admin rights required</li>
+            <li>Dark-themed Settings and About dialogs with persistent preferences</li>
+            <li>Optional autostart with Windows</li>
+            <li>Configurable hotkey, notification duration, and OUI auto-update interval</li>
+        </ul>
+    </section>
+
+    <section class="requirements">
+        <h2>System requirements</h2>
+        <ul>
+            <li>Windows 7 or later (Windows 10/11 recommended)</li>
+            <li>No admin rights required</li>
+            <li>~50 MB disk space</li>
+            <li>Internet connection for initial OUI database download (~3.5 MB)</li>
+        </ul>
+    </section>
+
+    <footer>
+        <p>
+            <a href="https://github.com/aleled/mac-converter-2" rel="noopener">View source on GitHub</a>
+        </p>
+        <p class="meta">
+            MIT License &middot; &copy; 2026 Alejandro Lichtenfeld
+        </p>
+    </footer>
+</main>
+
+<script>
+(function() {
+    const REPO = 'aleled/mac-converter-2';
+    const FALLBACK_VERSION = '2.4.0';
+
+    const versionEl = document.querySelector('[data-version]');
+    const btn = document.querySelector('[data-download]');
+    const ctaSub = document.querySelector('[data-cta-sub]');
+
+    fetch(`https://api.github.com/repos/${REPO}/releases/latest`)
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(release => {
+            const tag = release.tag_name || `v${FALLBACK_VERSION}`;
+            const exeAsset = (release.assets || []).find(a => a.name && a.name.toLowerCase().endsWith('.exe'));
+            versionEl.textContent = tag;
+            if (exeAsset) {
+                btn.href = exeAsset.browser_download_url;
+                btn.textContent = `Download ${tag} for Windows`;
+                ctaSub.textContent = `Installer (~51 MB). System requirements: Windows 7 or later.`;
+            } else {
+                btn.href = `https://github.com/${REPO}/releases/tag/${tag}`;
+                btn.textContent = `View ${tag} release on GitHub`;
+                ctaSub.textContent = `No .exe asset attached to ${tag} yet — see the release page.`;
+            }
+        })
+        .catch(() => {
+            versionEl.textContent = `v${FALLBACK_VERSION} pending release`;
+            btn.href = `https://github.com/${REPO}`;
+            btn.textContent = 'Coming soon &mdash; view on GitHub';
+            btn.innerHTML = 'Coming soon &mdash; view on GitHub';
+            ctaSub.textContent = `v${FALLBACK_VERSION} hasn't been published as a GitHub Release yet. Check back soon or build from source.`;
+        });
+})();
+</script>
+</body>
+</html>

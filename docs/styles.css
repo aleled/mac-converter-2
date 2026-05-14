@@ -1,0 +1,167 @@
+/* MAC Address Converter — Download portal stylesheet
+   Palette matches the app's dark theme:
+     #2b2b2b background, #0078d4 accent, #e0e0e0 body text. */
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: #1e1e1e;
+    color: #e0e0e0;
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 48px 24px 32px;
+}
+
+/* Header */
+header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.app-icon {
+    width: 128px;
+    height: 128px;
+    image-rendering: -webkit-optimize-contrast;
+}
+
+h1 {
+    margin: 16px 0 8px;
+    font-size: 2rem;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.version-badge {
+    display: inline-block;
+    margin: 0 0 16px;
+    padding: 4px 12px;
+    background: #2b2b2b;
+    border: 1px solid #555;
+    border-radius: 999px;
+    color: #b0b0b0;
+    font-size: 0.85rem;
+    font-family: "Segoe UI Mono", "Cascadia Mono", Consolas, monospace;
+}
+
+.tagline {
+    margin: 0 auto;
+    max-width: 540px;
+    color: #c0c0c0;
+    font-size: 1rem;
+}
+
+/* CTA section */
+.cta-section {
+    text-align: center;
+    padding: 32px 0;
+    border-top: 1px solid #333;
+    border-bottom: 1px solid #333;
+    margin-bottom: 32px;
+}
+
+.download-btn {
+    display: inline-block;
+    background: #0078d4;
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 1.1rem;
+    padding: 14px 36px;
+    border-radius: 6px;
+    transition: background 0.15s ease;
+}
+
+.download-btn:hover,
+.download-btn:focus {
+    background: #1084d8;
+    outline: none;
+}
+
+.download-btn:focus-visible {
+    outline: 2px solid #66b3e6;
+    outline-offset: 2px;
+}
+
+.cta-sub {
+    margin: 16px 0 0;
+    color: #888;
+    font-size: 0.9rem;
+}
+
+/* Content sections */
+section.features,
+section.requirements {
+    margin-bottom: 32px;
+}
+
+h2 {
+    margin: 0 0 12px;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+li {
+    margin-bottom: 8px;
+}
+
+kbd {
+    display: inline-block;
+    padding: 1px 6px;
+    background: #2b2b2b;
+    border: 1px solid #555;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-family: "Segoe UI Mono", "Cascadia Mono", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.2;
+}
+
+/* Footer */
+footer {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid #333;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+footer a {
+    color: #4ea8e0;
+    text-decoration: none;
+}
+
+footer a:hover,
+footer a:focus {
+    text-decoration: underline;
+}
+
+footer .meta {
+    margin-top: 8px;
+    color: #888;
+    font-size: 0.8rem;
+}
+
+/* Responsive — phone */
+@media (max-width: 480px) {
+    .container { padding: 32px 16px 24px; }
+    h1 { font-size: 1.6rem; }
+    .app-icon { width: 96px; height: 96px; }
+    .download-btn { padding: 12px 24px; font-size: 1rem; display: block; }
+}
