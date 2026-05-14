@@ -186,9 +186,13 @@ def on_quit(icon, item):
     """
     global listener
     icon.stop()
-    if listener:
-        listener.stop()
-    exit_event.set()
+    # F29: give the pynput listener a chance to terminate cleanly
+    if listener is not None:
+        try:
+            listener.stop()
+            listener.join(timeout=2.0)
+        except RuntimeError:
+            pass
     # F26: give the OUI worker a chance to finish os.replace before the
     # process dies. The worker thread reference is held by
     # OUIDownloadDialog (which may not be reachable from here); the best
@@ -198,10 +202,15 @@ def on_quit(icon, item):
         import time as _time
         _time.sleep(0.5)
     app = QApplication.instance()
-    if app:
+    if app is not None:
+        # F27: stop any QTimers that may still be running so they don't
+        # fire during shutdown teardown.
+        for widget in app.allWidgets():
+            for timer in widget.findChildren(QTimer):
+                timer.stop()
         app.quit()
 
-exit_event = threading.Event()
+
 about_dialog_request_queue = queue.Queue()
 settings_dialog_request_queue = queue.Queue()
 format_popup_request_queue = queue.Queue()  # Queue for format popup requests
@@ -256,7 +265,7 @@ def show_format_popup(app, formats, current_index, duration_seconds, mac_normali
     if current_format_popup is not None:
         try:
             current_format_popup.close()
-        except:
+        except Exception:
             pass
         current_format_popup = None
 
@@ -279,7 +288,7 @@ def show_error_popup(app, message, duration_seconds):
     try:
         icon_path = get_icon_path()
         dlg.setWindowIcon(QIcon(icon_path))
-    except:
+    except Exception:
         pass
 
     dlg.setWindowFlags(dlg.windowFlags() | Qt.WindowStaysOnTopHint | Qt.Tool)
@@ -301,7 +310,7 @@ def show_error_popup(app, message, duration_seconds):
         x = screen_geom.width() - dlg.width() - 20
         y = screen_geom.height() - dlg.height() - 20
         dlg.move(x, y)
-    except:
+    except Exception:
         pass
 
     # Auto-close timer
@@ -392,7 +401,7 @@ class AboutDialog(QDialog):
         try:
             icon_path = get_icon_path()
             self.setWindowIcon(QIcon(icon_path))
-        except:
+        except Exception:
             pass
 
         # Apply dark theme stylesheet
@@ -431,7 +440,7 @@ class AboutDialog(QDialog):
             icon_label.setPixmap(scaled_pixmap)
             icon_label.setAlignment(Qt.AlignCenter)
             layout.addWidget(icon_label)
-        except:
+        except Exception:
             pass
 
         # App name
@@ -503,7 +512,7 @@ class AboutDialog(QDialog):
                     import datetime
                     dt = datetime.datetime.fromisoformat(last_dl)
                     oui_stats.append(f"Downloaded: {dt.strftime('%Y-%m-%d %H:%M:%S')}")
-                except:
+                except Exception:
                     oui_stats.append(f"Downloaded: {last_dl}")
             else:
                 oui_stats.append("Downloaded: Unknown")
@@ -566,7 +575,7 @@ class OUIViewerDialog(QDialog):
         try:
             icon_path = get_icon_path()
             self.setWindowIcon(QIcon(icon_path))
-        except:
+        except Exception:
             pass
 
         self.setStyleSheet("""
@@ -740,7 +749,7 @@ class OUIDownloadDialog(QDialog):
         try:
             icon_path = get_icon_path()
             self.setWindowIcon(QIcon(icon_path))
-        except:
+        except Exception:
             pass
 
         self.setStyleSheet("""
@@ -960,7 +969,7 @@ class SettingsDialog(QDialog):
         try:
             icon_path = get_icon_path()
             self.setWindowIcon(QIcon(icon_path))
-        except:
+        except Exception:
             pass
 
         # Apply dark theme stylesheet
@@ -1047,7 +1056,7 @@ class SettingsDialog(QDialog):
             icon_label = QLabel()
             icon_label.setPixmap(scaled_pixmap)
             header_layout.addWidget(icon_label)
-        except:
+        except Exception:
             pass
 
         header_text = QLabel("Settings")
@@ -1261,7 +1270,7 @@ class FormatSelectorPopup(QDialog):
         try:
             icon_path = get_icon_path()
             self.setWindowIcon(QIcon(icon_path))
-        except:
+        except Exception:
             pass  # Ignore if icon not found
 
         # Window flags: always on top, tool window (no taskbar entry)
@@ -1285,7 +1294,7 @@ class FormatSelectorPopup(QDialog):
             icon_label = QLabel()
             icon_label.setPixmap(scaled_pixmap)
             header_layout.addWidget(icon_label)
-        except:
+        except Exception:
             pass  # Icon not found, just skip
 
         header_title = QLabel("MAC Converter")
@@ -1432,7 +1441,7 @@ class FormatSelectorPopup(QDialog):
             y = screen_height - self.height() - margin
 
             self.move(x, y)
-        except:
+        except Exception:
             # Fallback: center on screen
             self.move(QApplication.desktop().screen().rect().center() - self.rect().center())
 
@@ -1478,7 +1487,7 @@ class VendorPopup(QDialog):
         try:
             icon_path = get_icon_path()
             self.setWindowIcon(QIcon(icon_path))
-        except:
+        except Exception:
             pass
 
         self.setWindowFlags(
@@ -1522,7 +1531,7 @@ class VendorPopup(QDialog):
             icon_label = QLabel()
             icon_label.setPixmap(scaled)
             header_layout.addWidget(icon_label)
-        except:
+        except Exception:
             pass
 
         header_title = QLabel("Vendor Lookup")
@@ -1603,7 +1612,7 @@ class VendorPopup(QDialog):
             x = screen_geom.width() - self.width() - 20
             y = screen_geom.height() - self.height() - 20
             self.move(x, y)
-        except:
+        except Exception:
             pass
 
     def tick(self):
@@ -1645,7 +1654,7 @@ def show_vendor_popup(vendor_name, mac_normalized, duration_seconds):
     if current_vendor_popup is not None:
         try:
             current_vendor_popup.close()
-        except:
+        except Exception:
             pass
         current_vendor_popup = None
     current_vendor_popup = VendorPopup(vendor_name, mac_normalized, duration_seconds)
@@ -1916,8 +1925,13 @@ def main():
                     'message': f"OUI database unavailable: {result}"
                 })
 
-        oui_thread = threading.Thread(target=oui_init_worker, daemon=True)
-        oui_thread.start()
+        # F30: defer OUI auto-update one Qt tick so progress updates
+        # don't race the event-loop startup.
+        def _start_oui_init():
+            oui_thread = threading.Thread(target=oui_init_worker, daemon=True)
+            oui_thread.start()
+
+        QTimer.singleShot(0, _start_oui_init)
 
     # Add QTimer for About dialog
     def poll_about_dialog():
