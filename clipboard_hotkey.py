@@ -213,7 +213,16 @@ def handle_hotkey(app):
     Args:
         app (QApplication): The running Qt application instance.
     """
-    text = pyperclip.paste()
+    try:
+        text = pyperclip.paste()
+    except pyperclip.PyperclipException as e:
+        duration = settings.get('notification_duration', 3)
+        format_popup_request_queue.put({
+            'type': 'error',
+            'message': f"Clipboard busy: {e}",
+            'duration': duration,
+        })
+        return
     mac = detect_mac(text)
 
     if not mac:
@@ -237,7 +246,16 @@ def handle_hotkey(app):
     converted_mac = formats[next_idx][1]
 
     # Copy to clipboard
-    pyperclip.copy(converted_mac)
+    try:
+        pyperclip.copy(converted_mac)
+    except pyperclip.PyperclipException as e:
+        duration = settings.get('notification_duration', 3)
+        format_popup_request_queue.put({
+            'type': 'error',
+            'message': f"Clipboard busy, can't copy: {e}",
+            'duration': duration,
+        })
+        return
 
     # Update last used format index
     settings['last_format_index'] = next_idx
@@ -1263,7 +1281,11 @@ class FormatSelectorPopup(QDialog):
     def on_format_clicked(self, label):
         """Handle format click: copy to clipboard and close."""
         # Copy to clipboard
-        pyperclip.copy(label.mac_value)
+        try:
+            pyperclip.copy(label.mac_value)
+        except pyperclip.PyperclipException:
+            self.setWindowTitle("Clipboard busy")
+            return
 
         # Update settings with new format index
         settings['last_format_index'] = label.mac_index
@@ -1393,9 +1415,9 @@ class VendorPopup(QDialog):
         button_row = QHBoxLayout()
 
         if vendor_name:
-            copy_btn = QPushButton("Copy to Clipboard")
-            copy_btn.clicked.connect(self.copy_vendor)
-            button_row.addWidget(copy_btn)
+            self.copy_btn = QPushButton("Copy to Clipboard")
+            self.copy_btn.clicked.connect(self.copy_vendor)
+            button_row.addWidget(self.copy_btn)
 
         button_row.addStretch()
 
@@ -1443,7 +1465,11 @@ class VendorPopup(QDialog):
     def copy_vendor(self):
         """Copy vendor name to clipboard and close."""
         if self.vendor_name:
-            pyperclip.copy(self.vendor_name)
+            try:
+                pyperclip.copy(self.vendor_name)
+            except pyperclip.PyperclipException:
+                self.copy_btn.setText("Clipboard busy")
+                return
             self.vendor_copied = True
         self.close()
 
