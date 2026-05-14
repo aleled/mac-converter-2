@@ -52,6 +52,30 @@ def _atomic_write_json(path, data):
     os.replace(tmp_path, path)
 
 
+def _validate_hotkey_string(hotkey_str):
+    """Return None if valid, an error message string if not.
+
+    Uses pynput.keyboard.HotKey.parse to mirror what listen_hotkey will do.
+    pynput canonical form wraps multi-character named keys (e.g. ctrl, shift,
+    alt, cmd) in angle brackets but leaves single-character keys bare.
+    """
+    if not hotkey_str or not hotkey_str.strip():
+        return "Hotkey cannot be empty"
+    try:
+        parts = []
+        for k in hotkey_str.split('+'):
+            token = k.strip().lower()
+            if not token:
+                raise ValueError("empty key segment")
+            # Single-character keys are passed bare; named keys go in <>.
+            parts.append(token if len(token) == 1 else f'<{token}>')
+        canonical = '+'.join(parts)
+        keyboard.HotKey.parse(canonical)
+        return None
+    except (ValueError, KeyError) as e:
+        return f"Invalid hotkey: {e}"
+
+
 # --- Tray Icon Setup ---
 def get_icon_path():
     """
@@ -940,8 +964,13 @@ class SettingsDialog(QDialog):
         hotkey_hint = QLabel("Note: Hotkey change requires app restart")
         hotkey_hint.setStyleSheet("color: #999999; font-size: 8pt; font-style: italic;")
 
+        self.hotkey_error_label = QLabel("")
+        self.hotkey_error_label.setStyleSheet("color: #d32f2f; font-size: 9pt;")
+        self.hotkey_error_label.setVisible(False)
+
         hotkey_layout.addWidget(hotkey_label)
         hotkey_layout.addWidget(self.hotkey_input)
+        hotkey_layout.addWidget(self.hotkey_error_label)
         hotkey_layout.addWidget(hotkey_hint)
         hotkey_group.setLayout(hotkey_layout)
         main_layout.addWidget(hotkey_group)
@@ -1062,7 +1091,16 @@ class SettingsDialog(QDialog):
 
     def save_settings(self):
         """Save settings and close dialog."""
-        settings['hotkey'] = self.hotkey_input.text().strip()
+        hotkey_str = self.hotkey_input.text().strip()
+        err = _validate_hotkey_string(hotkey_str)
+        if err is not None:
+            self.hotkey_error_label.setText(err)
+            self.hotkey_error_label.setVisible(True)
+            return  # do NOT call save_settings or close the dialog
+        else:
+            self.hotkey_error_label.setVisible(False)
+
+        settings['hotkey'] = hotkey_str
         settings['notification_duration'] = self.duration_spinbox.value()
         settings['autostart'] = self.autostart_checkbox.isChecked()
         settings['oui_enabled'] = self.oui_enabled_checkbox.isChecked()
