@@ -47,14 +47,16 @@ class OUIDatabase:
         except OSError:
             return True
 
-    def download(self, progress_callback=None):
+    def download(self, progress_callback=None, cancel_event=None):
         """
         Download OUI CSV from IEEE. Blocking call — run in a background thread.
 
         Args:
-            progress_callback: Optional callable that accepts either:
-                - A string message (status text), or
-                - A dict with 'bytes_downloaded' and 'total_bytes' keys (progress update).
+            progress_callback: Optional callable accepting either a status
+                string or a dict with 'bytes_downloaded'/'total_bytes' keys.
+            cancel_event: Optional threading.Event. If set during download,
+                the call returns (False, "cancelled") without touching the
+                live oui.csv.
 
         Returns:
             (True, None) on success, (False, error_message) on failure.
@@ -66,42 +68,55 @@ class OUIDatabase:
                 progress_callback("Connecting to IEEE...")
 
             req = urllib.request.Request(OUI_URL, headers={
-                'User-Agent': 'MAC-Converter/2.3.0'
+                'User-Agent': 'MAC-Converter/2.4.0'
             })
-            response = urllib.request.urlopen(req, timeout=30)
 
-            # Get total size from Content-Length header (if available)
-            total_bytes = int(response.headers.get('Content-Length', 0))
+            with urllib.request.urlopen(req, timeout=30) as response:
+                # F3: reject if the server returned HTML / non-CSV
+                content_type = response.headers.get('Content-Type', '').lower()
+                if 'html' in content_type:
+                    return (False, f"Server returned text/html (likely captive portal or error page), refusing to overwrite oui.csv")
 
-            # Read in chunks and report progress
-            chunk_size = 16384  # 16 KB chunks
-            data = bytearray()
-            bytes_downloaded = 0
+                total_bytes = int(response.headers.get('Content-Length', 0))
 
-            while True:
-                chunk = response.read(chunk_size)
-                if not chunk:
-                    break
-                data.extend(chunk)
-                bytes_downloaded += len(chunk)
+                chunk_size = 16384
+                data = bytearray()
+                bytes_downloaded = 0
+                first_chunk = True
 
-                if progress_callback and total_bytes > 0:
-                    progress_callback({
-                        'bytes_downloaded': bytes_downloaded,
-                        'total_bytes': total_bytes
-                    })
+                while True:
+                    if cancel_event is not None and cancel_event.is_set():
+                        return (False, "cancelled")
+
+                    chunk = response.read(chunk_size)
+                    if not chunk:
+                        break
+
+                    # F3: sniff the first chunk for HTML magic-bytes
+                    if first_chunk:
+                        leading = bytes(chunk[:200]).lstrip().lower()
+                        if leading.startswith(b'<!doctype') or leading.startswith(b'<html') or leading.startswith(b'<?xml'):
+                            return (False, "Response body looks like HTML/XML, not CSV — refusing to overwrite oui.csv")
+                        first_chunk = False
+
+                    data.extend(chunk)
+                    bytes_downloaded += len(chunk)
+
+                    if progress_callback and total_bytes > 0:
+                        progress_callback({
+                            'bytes_downloaded': bytes_downloaded,
+                            'total_bytes': total_bytes
+                        })
 
             if len(data) < 1000:
                 return (False, "Downloaded file too small, may be corrupt")
 
-            # Atomic write: temp file then rename
+            # F2: atomic replace. os.replace is atomic where the OS supports it
+            # and works on Windows where os.rename would fail if dest exists.
             temp_path = self.oui_path + ".tmp"
             with open(temp_path, 'wb') as f:
                 f.write(data)
-
-            if os.path.exists(self.oui_path):
-                os.remove(self.oui_path)
-            os.rename(temp_path, self.oui_path)
+            os.replace(temp_path, self.oui_path)
 
             if progress_callback:
                 progress_callback("OUI database downloaded successfully")
@@ -111,9 +126,10 @@ class OUIDatabase:
             msg = str(e.reason) if hasattr(e, 'reason') else str(e)
             return (False, f"Network error: {msg}")
         except OSError as e:
-            return (False, f"File error: {str(e)}")
+            # F12: don't leak full paths to the UI — caller is responsible for sanitization
+            return (False, f"File error: {os.path.basename(self.oui_path)} could not be written")
         except Exception as e:
-            return (False, f"Download failed: {str(e)}")
+            return (False, f"Download failed: {type(e).__name__}")
 
     def load(self):
         """
@@ -141,6 +157,10 @@ class OUIDatabase:
                         org_name = row[2].strip()
                         if len(assignment) == 6 and org_name:
                             db[assignment] = org_name
+
+            # F5: a header-only or empty CSV is a corruption signal, not a success.
+            if len(db) == 0:
+                return (False, "OUI database parsed to zero entries (empty or corrupt)")
 
             with self._lock:
                 self._db = db
