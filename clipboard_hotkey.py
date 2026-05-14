@@ -76,6 +76,49 @@ def _validate_hotkey_string(hotkey_str):
         return f"Invalid hotkey: {e}"
 
 
+# --- Autostart via Startup-folder shortcut (Phase 2 fix for F13, F31) ---
+
+def _autostart_lnk_path():
+    """Path to the user's Startup-folder shortcut for MAC Converter."""
+    appdata = os.environ.get('APPDATA', os.path.expanduser('~'))
+    startup_dir = os.path.join(
+        appdata, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'
+    )
+    return os.path.join(startup_dir, 'MAC-Converter.lnk')
+
+
+def is_autostart_enabled():
+    """Return True if the autostart shortcut exists."""
+    return os.path.exists(_autostart_lnk_path())
+
+
+def set_autostart_enabled(enabled):
+    """Create or remove the Startup-folder shortcut.
+
+    Best-effort: failures are logged to stderr but do not raise. Callers
+    should re-query is_autostart_enabled() to confirm.
+    """
+    lnk_path = _autostart_lnk_path()
+    if enabled:
+        try:
+            import win32com.client
+            shell = win32com.client.Dispatch('WScript.Shell')
+            shortcut = shell.CreateShortcut(lnk_path)
+            shortcut.TargetPath = sys.executable
+            shortcut.WorkingDirectory = os.path.dirname(sys.executable)
+            shortcut.IconLocation = sys.executable
+            shortcut.Description = 'MAC Address Converter'
+            shortcut.save()
+        except Exception as e:
+            print(f"[ERROR] set_autostart_enabled(True): {e}", file=sys.stderr)
+    else:
+        try:
+            if os.path.exists(lnk_path):
+                os.remove(lnk_path)
+        except OSError as e:
+            print(f"[ERROR] set_autostart_enabled(False): {e}", file=sys.stderr)
+
+
 # --- Tray Icon Setup ---
 def get_icon_path():
     """
@@ -994,7 +1037,8 @@ class SettingsDialog(QDialog):
         startup_layout = QVBoxLayout()
 
         self.autostart_checkbox = QCheckBox("Start with Windows")
-        self.autostart_checkbox.setChecked(settings.get('autostart', False))
+        # Query the actual filesystem state, not just the settings value
+        self.autostart_checkbox.setChecked(is_autostart_enabled())
 
         startup_layout.addWidget(self.autostart_checkbox)
         startup_group.setLayout(startup_layout)
@@ -1102,7 +1146,9 @@ class SettingsDialog(QDialog):
 
         settings['hotkey'] = hotkey_str
         settings['notification_duration'] = self.duration_spinbox.value()
-        settings['autostart'] = self.autostart_checkbox.isChecked()
+        autostart_wanted = self.autostart_checkbox.isChecked()
+        set_autostart_enabled(autostart_wanted)
+        settings['autostart'] = is_autostart_enabled()  # reflect actual state
         settings['oui_enabled'] = self.oui_enabled_checkbox.isChecked()
         settings['oui_auto_update'] = self.oui_auto_update_checkbox.isChecked()
         settings['oui_update_interval_days'] = self.oui_interval_spinbox.value()
