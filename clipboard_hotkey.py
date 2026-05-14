@@ -26,9 +26,9 @@ import platform
 import os
 from PyQt5.QtWidgets import (QApplication, QDialog, QVBoxLayout, QLabel, QHBoxLayout, QWidget,
     QSizePolicy, QCheckBox, QPushButton, QLineEdit, QSpinBox, QGroupBox, QProgressBar,
-    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QScrollArea)
+    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QScrollArea, QShortcut)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject
-from PyQt5.QtGui import QFont, QColor, QIcon, QBrush, QPixmap, QCursor
+from PyQt5.QtGui import QFont, QColor, QIcon, QBrush, QPixmap, QCursor, QKeySequence
 import queue
 import ctypes
 import time
@@ -1349,27 +1349,31 @@ class FormatSelectorPopup(QDialog):
         # Position near bottom-right (near system tray)
         self.position_near_tray()
 
-        # Start global Enter key listener (pynput-based, works regardless of focus)
-        self._enter_listener = None
-        if (self.mac_normalized
-                and settings.get('oui_enabled', True)
-                and oui_db and oui_db.is_loaded):
-            self._start_enter_listener()
+        # F19: scope Enter handling to this popup widget via QShortcut.
+        # Previously a global pynput.keyboard.Listener was used, which
+        # captured every keystroke system-wide while the popup was open.
+        self._enter_shortcut = QShortcut(QKeySequence(Qt.Key_Return), self)
+        self._enter_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self._enter_shortcut.activated.connect(self._on_enter_pressed)
+        self._enter_shortcut_pad = QShortcut(QKeySequence(Qt.Key_Enter), self)
+        self._enter_shortcut_pad.setContext(Qt.WidgetWithChildrenShortcut)
+        self._enter_shortcut_pad.activated.connect(self._on_enter_pressed)
 
-    def _start_enter_listener(self):
-        """Start a temporary global keyboard listener for Enter key."""
-        def on_press(key):
-            try:
-                if key == keyboard.Key.enter:
-                    # Queue vendor lookup request (thread-safe)
-                    vendor_lookup_request_queue.put({
-                        'mac_normalized': self.mac_normalized
-                    })
-                    return False  # Stop this listener
-            except Exception:
-                pass
-        self._enter_listener = keyboard.Listener(on_press=on_press)
-        self._enter_listener.start()
+    def _on_enter_pressed(self):
+        """Triggered when Enter is pressed while this popup has focus.
+
+        Replaces the previous global pynput listener (F19). Triggers OUI
+        vendor lookup via the existing vendor_lookup_request_queue.
+        """
+        mac = getattr(self, 'mac_normalized', None)
+        if not mac:
+            return
+        if not (settings.get('oui_enabled', True) and oui_db and oui_db.is_loaded):
+            return
+        vendor_lookup_request_queue.put({
+            'mac_normalized': mac,
+        })
+        self.close()
 
     def position_near_tray(self):
         """Position the popup near the system tray (bottom-right corner)."""
@@ -1407,15 +1411,9 @@ class FormatSelectorPopup(QDialog):
         self.close()
 
     def closeEvent(self, event):
-        """Stop timer and Enter listener when closing."""
+        """Stop the auto-close timer when closing."""
         if hasattr(self, 'auto_close_timer'):
             self.auto_close_timer.stop()
-        if hasattr(self, '_enter_listener') and self._enter_listener:
-            try:
-                self._enter_listener.stop()
-            except Exception:
-                pass
-            self._enter_listener = None
         super().closeEvent(event)
 
 # --- Vendor Lookup Popup ---
