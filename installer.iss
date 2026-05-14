@@ -2,7 +2,7 @@
 ; Created: December 15, 2025
 
 #define MyAppName "MAC Address Converter"
-#define MyAppVersion "2.3.0"
+#define MyAppVersion "2.4.0"
 #define MyAppPublisher "Alejandro Lichtenfeld"
 #define MyAppURL "https://github.com/aleled/mac-converter-2"
 #define MyAppExeName "MAC-Converter.exe"

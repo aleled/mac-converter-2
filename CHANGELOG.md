@@ -5,6 +5,57 @@
 
 # Changelog
 
+## [2.4.0] - 2026-05-14
+### Added
+- pytest regression suite (`tests/`) covering pure-logic fixes in `mac_formats.py`, `oui_lookup.py`, and settings I/O. Dev deps in `requirements-dev.txt`.
+- Inline error label for invalid hotkey input in Settings dialog.
+- Tray-notification fallback when clipboard is locked instead of silent listener-thread death.
+- Single-instance check: a second app launch shows "MAC Converter is already running" and exits cleanly.
+- `set_autostart_enabled()` / `is_autostart_enabled()` helpers manage a Startup-folder shortcut (`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\MAC-Converter.lnk`).
+- `_validate_settings(d)` coerces/clamps every known setting key, falling back to defaults per-key on bad input.
+- `_atomic_write_json(path, data)` helper and module-level `_settings_lock` serialize all `save_settings` writes.
+- OUI download hardening: `cancel_event` parameter for cooperative shutdown, Content-Type and magic-byte sniff that rejects HTML responses.
+
+### Changed
+- Settings I/O is now atomic (`os.replace`) and serialized through `_settings_lock`. Corrupt `settings.json` is renamed to `settings.json.corrupt-<unix-ts>` instead of being silently overwritten with defaults.
+- OUI download rejects HTML / non-CSV responses (e.g. captive portals) and zero-entry CSVs before they can overwrite the live database.
+- Format popup Enter key handling switched from a system-wide pynput keyboard listener to a Qt-scoped `QShortcut` — no more global keystroke capture in other apps.
+- PyInstaller spec ships a real `.ico` (7 sizes) for the Windows exe icon and disables UPX to reduce antivirus false positives.
+- `requirements.txt` no longer lists the unused `keyboard` package or the duplicate `PyQt5` line.
+- Installer's `[Tasks] startup` and `{userstartup}\…` entries removed; autostart is owned by the app via the Startup-folder shortcut (single source of truth).
+- `env_load.ps1` error message uses native PowerShell `-ForegroundColor` instead of literal ANSI escapes.
+- OUI auto-update at startup deferred one Qt event-loop tick via `QTimer.singleShot(0, …)`.
+
+### Fixed
+- F1: `MAC_REGEX` no longer accepts mixed `:`/`-` separators in the same MAC.
+- F2: atomic `os.replace` in OUI download preserves the prior `oui.csv` on rename failure.
+- F3: HTML / non-CSV response detection (Content-Type sniff + first-chunk magic bytes).
+- F4: HTTPS response opened in a `with` block so the socket closes on exception.
+- F5: zero-entry CSV parse is now a load failure, not a silent success.
+- F6: `pyperclip.paste()` / `.copy()` in the hotkey handler are wrapped — locked clipboard no longer crashes the listener thread.
+- F7, F16, F23, F28: atomic `save_settings` with module-level lock; three writer threads no longer race.
+- F8, F15, F24: `_validate_settings` coerces/clamps all known keys; corrupt JSON triggers rename-and-fallback.
+- F9: dead `exit_event` synchronization primitive removed.
+- F10, F17, F22: 17 bare `except:` clauses narrowed to `except Exception:`.
+- F11: OUI download worker honors a cancel event; closing the dialog mid-download cleanly tears down the worker and drains the progress queue.
+- F12: error messages no longer leak the full `oui.csv` path containing the user's username.
+- F13: "Start with Windows" checkbox actually creates/removes a Startup-folder shortcut now (was previously cosmetic).
+- F14: invalid hotkey input is rejected on Save with an inline error label.
+- F18: a second click on "Update OUI database" is refused while a download is in progress.
+- F19: FormatSelectorPopup Enter key uses `QShortcut` (Qt-scoped) instead of a global pynput listener.
+- F20, F21: `pyperclip.copy()` in FormatSelectorPopup and VendorPopup wrapped.
+- F25: single-instance mutex prevents double-launch.
+- F26: OUI worker cooperative shutdown reduces the daemon-kill corruption window.
+- F27, F29: QTimers stop and pynput listener joins on app quit.
+- F30: OUI auto-update at startup deferred one Qt tick.
+- F31: installer no longer adds its own Startup-folder shortcut; the app owns autostart.
+- F32: PyInstaller icon is now a real multi-size `.ico`.
+- F33: `pystray._win32` and pywin32 modules are explicitly hidden imports.
+- F34: UPX disabled.
+- F35: unused `keyboard` package removed from `requirements.txt`.
+- F36: `env_load.ps1` ANSI escape garbage replaced with native PowerShell color.
+- F37: README format table renamed formats 9-10 from "Windows format alternate" to "Hyphen-6char (Cisco-style)".
+
 ## [2.3.0] - 2026-02-17
 ### Added
 - OUI vendor lookup: press Enter in format popup to identify MAC address manufacturer

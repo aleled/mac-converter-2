@@ -453,7 +453,7 @@ class AboutDialog(QDialog):
         layout.addWidget(app_name)
 
         # Version
-        version_label = QLabel("Version 2.3.0")
+        version_label = QLabel("Version 2.4.0")
         version_label.setAlignment(Qt.AlignCenter)
         version_label.setStyleSheet("color: #999999; font-size: 10pt;")
         layout.addWidget(version_label)
@@ -1759,7 +1759,7 @@ DEFAULT_SETTINGS = {
     'notification_duration': 3,          # Notification display seconds
     'author': 'Alejandro Lichtenfeld',   # Correct author name
     'license': 'MIT',
-    'about': 'MAC Address Converter Utility v2.3.0\nAuthor: Alejandro Lichtenfeld\nLicense: MIT\nhttps://github.com/aleled/mac-converter-2',
+    'about': 'MAC Address Converter Utility v2.4.0\nAuthor: Alejandro Lichtenfeld\nLicense: MIT\nhttps://github.com/aleled/mac-converter-2',
     'oui_enabled': True,                 # Enable OUI vendor lookup
     'oui_auto_update': True,             # Auto-download OUI database when stale
     'oui_update_interval_days': 7,       # Days before OUI database is considered stale

@@ -1,7 +1,7 @@
 # TODO / Feature Tracker
 
-**Current Version:** 2.3.0 (Production Ready)
-**Last Updated:** 2026-02-17
+**Current Version:** 2.4.0 (Production Ready)
+**Last Updated:** 2026-05-14
 
 ---
 
@@ -90,7 +90,7 @@
 
 ---
 
-## Current Release (v2.3.0)
+## Current Release (v2.4.0)
 
 **Status:** Production Ready ✅
 
@@ -111,7 +111,7 @@
 
 ### Build Artifacts
 - Standalone executable: `dist/MAC-Converter.exe` (~48 MB)
-- Windows installer: `installer-output/MAC-Converter-Setup-v2.3.0.exe` (~51 MB)
+- Windows installer: `installer-output/MAC-Converter-Setup-v2.4.0.exe` (~51 MB)
 - Source code: All files cleaned and optimized
 
 ---
@@ -204,7 +204,7 @@ pyinstaller mac-converter.spec
 ### Build Installer
 ```bash
 "C:\Program Files (x86)\Inno Setup 6\iscc.exe" installer.iss
-# Output: installer-output/MAC-Converter-Setup-v2.3.0.exe
+# Output: installer-output/MAC-Converter-Setup-v2.4.0.exe
 ```
 
 ---

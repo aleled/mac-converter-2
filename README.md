@@ -2,7 +2,7 @@
 
 A lightweight Windows system tray utility for converting MAC addresses between different formats with a global hotkey, auto-cycling format selection, and clipboard integration.
 
-**Current Version:** 2.3.0
+**Current Version:** 2.4.0
 **Status:** Production-ready ✅
 **License:** MIT
 **Author:** Alejandro Lichtenfeld
@@ -48,7 +48,7 @@ The app cycles through 10 formats:
 
 ### Option 1: Windows Installer (Recommended)
 
-1. Download `MAC-Converter-Setup-v2.3.0.exe` from GitHub releases
+1. Download `MAC-Converter-Setup-v2.4.0.exe` from GitHub releases
 2. Run the installer and follow the wizard
 3. Choose optional features:
    - Desktop shortcut
@@ -215,7 +215,7 @@ mac-converter-2/
 
 Output files:
 - Executable: `dist/MAC-Converter.exe`
-- Installer: `installer-output/MAC-Converter-Setup-v2.3.0.exe`
+- Installer: `installer-output/MAC-Converter-Setup-v2.4.0.exe`
 
 ---
 
@@ -270,6 +270,7 @@ Output files:
 
 ## Version History
 
+- **2.4.0** (2026-05-14): Bug-fix release — 37 audit findings closed across 5 high-severity (locked-clipboard crash, OUI download race, autostart now actually functional, hotkey validation, removal of system-wide keyboard hook), plus atomic settings/OUI writes, single-instance check, .ico icon, and dependency hygiene.
 - **2.3.0** (2026-02-17): OUI vendor lookup, IEEE database integration, vendor popup, database management UI
 - **2.2.0** (2025-12-31): Auto-cycling converter, dark theme UI enhancements, Windows installer
 - **2.1.0** (2025-06-07): Persistent settings, Settings dialog, About dialog, admin rights removed
