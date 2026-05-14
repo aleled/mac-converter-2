@@ -189,6 +189,14 @@ def on_quit(icon, item):
     if listener:
         listener.stop()
     exit_event.set()
+    # F26: give the OUI worker a chance to finish os.replace before the
+    # process dies. The worker thread reference is held by
+    # OUIDownloadDialog (which may not be reachable from here); the best
+    # we can do without a bigger refactor is wait briefly so the cancel
+    # signal propagates.
+    if _oui_download_in_progress.is_set():
+        import time as _time
+        _time.sleep(0.5)
     app = QApplication.instance()
     if app:
         app.quit()
@@ -223,6 +231,11 @@ vendor_lookup_request_queue = queue.Queue()
 
 # Queue for manual OUI download progress updates (for interactive progress bar)
 oui_download_progress_queue = queue.Queue()
+
+# F11/F18: Re-entrance guard for OUI download dialog. Set while a download
+# is running so a second Update click can be rejected, and so on_quit can
+# briefly wait for the worker to finish os.replace before process death.
+_oui_download_in_progress = threading.Event()
 
 # --- Format popup display function ---
 def show_format_popup(app, formats, current_index, duration_seconds, mac_normalized=None):
@@ -717,6 +730,13 @@ class OUIDownloadDialog(QDialog):
         self._success = False
         self._error_msg = None
 
+        # F11: cooperative-shutdown plumbing. The worker watches
+        # _cancel_event; closeEvent sets it and joins the thread.
+        self._cancel_event = threading.Event()
+        self._worker_thread = None
+        # F18: mark in-progress so a second click is refused.
+        _oui_download_in_progress.set()
+
         try:
             icon_path = get_icon_path()
             self.setWindowIcon(QIcon(icon_path))
@@ -832,7 +852,7 @@ class OUIDownloadDialog(QDialog):
                     oui_download_progress_queue.put({'status': 'progress', 'message': msg})
 
             oui_download_progress_queue.put({'status': 'progress', 'message': 'Connecting to IEEE...'})
-            success, error = oui_db.download(progress_callback=progress_cb)
+            success, error = oui_db.download(progress_callback=progress_cb, cancel_event=self._cancel_event)
 
             if success:
                 # Record download time
@@ -842,9 +862,11 @@ class OUIDownloadDialog(QDialog):
                 oui_download_progress_queue.put({'status': 'progress', 'message': 'Loading database into memory...'})
                 load_ok, result = oui_db.load()
                 if load_ok:
+                    # F12: do not leak the full oui.csv path (contains user's
+                    # Windows username) in the success message shown in the UI.
                     oui_download_progress_queue.put({
                         'status': 'done',
-                        'message': f'Database updated successfully!\n{result} OUI entries loaded.\nFile: {oui_db.oui_path}\nSize: {oui_db.file_size_display}'
+                        'message': f'Database updated successfully!\n{result} OUI entries loaded.\nSize: {oui_db.file_size_display}'
                     })
                 else:
                     oui_download_progress_queue.put({
@@ -857,8 +879,8 @@ class OUIDownloadDialog(QDialog):
                     'message': f'Download failed: {error}'
                 })
 
-        t = threading.Thread(target=worker, daemon=True)
-        t.start()
+        self._worker_thread = threading.Thread(target=worker, daemon=True)
+        self._worker_thread.start()
 
     def _poll_progress(self):
         """Poll download progress queue."""
@@ -906,8 +928,22 @@ class OUIDownloadDialog(QDialog):
             self._poll_timer.stop()
 
     def closeEvent(self, event):
+        # F11: signal the worker to stop and wait for it briefly so it
+        # doesn't keep writing to the (about-to-be-orphaned) progress
+        # queue or racing on oui.csv.tmp.
+        self._cancel_event.set()
+        if self._worker_thread is not None and self._worker_thread.is_alive():
+            self._worker_thread.join(timeout=2.0)
         if hasattr(self, '_poll_timer'):
             self._poll_timer.stop()
+        # Drain any pending queue messages so they don't leak into a
+        # future dialog instance.
+        try:
+            while True:
+                oui_download_progress_queue.get_nowait()
+        except queue.Empty:
+            pass
+        _oui_download_in_progress.clear()
         super().closeEvent(event)
 
 
@@ -1186,6 +1222,12 @@ class SettingsDialog(QDialog):
 
     def manual_oui_update(self):
         """Launch manual OUI database update with progress dialog."""
+        # F18: refuse to spawn a second concurrent download dialog.
+        if _oui_download_in_progress.is_set():
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.information(self, "MAC Converter",
+                "An OUI database update is already in progress.")
+            return
         dlg = OUIDownloadDialog(self)
         dlg.exec_()
 
