@@ -250,3 +250,90 @@
 ---
 
 Each session will be logged here with a summary of work done, pending tasks, and next steps.
+
+---
+
+## 2026-05-14 (Windows/PowerShell Session) — v2.4.0: Full audit, all-finding remediation, GitHub Pages portal
+
+### Engagement scope
+Owner-level pass over the whole repository: full code/security audit, fix everything found, ship a public download portal. Four phases planned (audit → fixes → installer-touch → portal). All four delivered in this session.
+
+### Phase 1 — Audit
+- Read every tracked source/build/doc file at the root.
+- Produced `docs/AUDIT-2026-05-14.md` (572 lines, 37 findings).
+- Severity distribution: 5 HIGH, 12 MEDIUM, 20 LOW, 0 CRITICAL.
+- Top 5 HIGH findings:
+  - F6: `pyperclip` not wrapped — locked clipboard crashes listener
+  - F11: OUI download worker race + orphan on dialog close
+  - F13: "Start with Windows" checkbox was cosmetic (no `winreg`/shortcut code)
+  - F14: Hotkey input not validated on Save — gibberish persists
+  - F19: FormatSelectorPopup used a global pynput keyboard listener (captured every keystroke system-wide)
+
+### Phase 2 — Bug fixes (15 commit groups)
+Each group references the F-IDs it closes in its commit message:
+1. `d262f7a` — pytest infrastructure
+2. `885a779` — atomic settings + lock (F7, F16, F23, F28)
+3. `9035697` — settings load validation + corrupt recovery (F8, F15, F24)
+4. `e669646` — OUI download hardening (F2, F3, F4, F5)
+5. `625fd7a` — regex tightening, reject mixed `:`/`-` (F1)
+6. `802d9cd` — pyperclip wrapping (F6, F20, F21)
+7. `4226c3e` — hotkey validation on Save (F14)
+8. `3c146b7` — Startup-folder autostart + installer cleanup (F13, F31)
+9. `7a73c83` — single-instance mutex (F25)
+10. `ef2a368` — Qt-scoped Enter key, remove pynput listener (F19)
+11. `a5704bd` — OUI worker shutdown + re-entrance guard + error sanitization (F11, F12, F18, F26)
+12. `6fd6326` — PyInstaller spec: real `.ico`, hidden imports, UPX off (F32, F33, F34); drop `keyboard` dep (F35)
+13. `7b21fc1` — cleanup batch: bare excepts, exit_event, timer/listener cleanup, env_load.ps1 (F9, F10, F17, F22, F27, F29, F30, F36)
+14. `4688bb6` — README format table + stale TODO claim (F37)
+15. `358885c` — version bump to 2.4.0 + CHANGELOG entry
+
+### Phase 3 — Installer
+Absorbed into Phase 2 commits 8 and 12. No standalone installer phase needed.
+
+### Phase 4 — GitHub Pages download portal
+- Built single-page static portal at `docs/index.html` + `docs/styles.css` + `docs/icon-v1.png`.
+- Dark theme matching the app palette (`#2b2b2b`, `#0078d4`).
+- Inline JS auto-fetches `https://api.github.com/repos/aleled/mac-converter-2/releases/latest` and updates the download button. Falls back to "Coming soon" if no release exists.
+- Operator instructions added at `docs/README.md`.
+- Pages enabled on `claude/eloquent-payne-7d7c9c` / `/docs` — live at https://aleled.github.io/mac-converter-2/.
+
+### Release
+- Built `dist/MAC-Converter.exe` (51 MB) via PyInstaller.
+- Built `installer-output/MAC-Converter-Setup-v2.4.0.exe` (54 MB) via Inno Setup.
+- Published GitHub Release `v2.4.0` with both artifacts attached.
+- Portal auto-detected the release and the download button is now live.
+
+### Documentation sweep
+- README, TODO, DEVELOPMENT_LOG, CHANGELOG all updated for v2.4.0.
+- Added SECURITY.md (vulnerability disclosure + audit reference).
+- Added CONTRIBUTING.md (consolidates development guidelines).
+- Updated GitHub repo metadata (description, homepage URL, topics).
+
+### Test coverage at end of session
+- 24/24 pytest regression tests green
+- Pure logic in `mac_formats.py`, `oui_lookup.py`, and settings I/O covered
+- UI behaviors verified by reading code; manual UI exercise still owed by maintainer
+
+### Pending / owed by maintainer
+- Run the installed v2.4.0 app once and exercise: hotkey, Settings save/load, autostart toggle, OUI Update + close mid-download
+- After merging PR #1, switch GitHub Pages source from `claude/eloquent-payne-7d7c9c` to `dev` (or wherever PR lands) so Pages tracks the canonical branch
+- Optionally: code-sign the exe (out of scope here)
+
+### Artifacts produced this session
+- `docs/AUDIT-2026-05-14.md` — security & bug audit
+- `docs/superpowers/specs/2026-05-14-full-review-fix-portal-design.md` — engagement-level design spec
+- `docs/superpowers/specs/2026-05-14-phase2-bug-fixes-design.md` — Phase 2 design spec
+- `docs/superpowers/specs/2026-05-14-phase4-portal-design.md` — Phase 4 design spec
+- `docs/superpowers/plans/2026-05-14-phase1-audit.md` — audit implementation plan
+- `docs/superpowers/plans/2026-05-14-phase2-bug-fixes.md` — Phase 2 implementation plan
+- `docs/index.html`, `docs/styles.css`, `docs/icon-v1.png`, `docs/README.md` — portal files
+- `tests/test_mac_formats.py`, `tests/test_oui_lookup.py`, `tests/test_settings_atomic.py`, `tests/test_settings_validate.py` — regression tests
+- `requirements-dev.txt`, `pytest.ini`, `tests/__init__.py`, `tests/conftest.py` — test infra
+- `icon-v1.ico` — multi-size icon for PyInstaller
+- `SECURITY.md`, `CONTRIBUTING.md` — repo policy docs
+
+### Branch state at session end
+- Branch: `claude/eloquent-payne-7d7c9c` (pushed to GitHub)
+- PR #1 open against `dev`: https://github.com/aleled/mac-converter-2/pull/1
+- Release v2.4.0 published: https://github.com/aleled/mac-converter-2/releases/tag/v2.4.0
+- Portal live: https://aleled.github.io/mac-converter-2/

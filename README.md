@@ -7,6 +7,31 @@ A lightweight Windows system tray utility for converting MAC addresses between d
 **License:** MIT
 **Author:** Alejandro Lichtenfeld
 
+### 📥 Download
+
+**[https://aleled.github.io/mac-converter-2/](https://aleled.github.io/mac-converter-2/)** — one-click installer for Windows. The download portal auto-points at the latest release.
+
+Direct links to v2.4.0:
+- **[MAC-Converter-Setup-v2.4.0.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.4.0/MAC-Converter-Setup-v2.4.0.exe)** — Windows installer (~54 MB)
+- **[MAC-Converter.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.4.0/MAC-Converter.exe)** — Standalone executable (~51 MB)
+
+---
+
+## What's new in 2.4.0
+
+A focused bug-fix release closing **37 audit findings** (5 high, 12 medium, 20 low) from a full security and correctness review of the codebase. Highlights:
+
+- 🛡️ **Locked clipboard no longer crashes the hotkey listener.** All `pyperclip` calls are wrapped — clipboard contention from Snipping Tool / RDP / etc. is now a recoverable notification rather than a silent death.
+- 🔒 **No more system-wide keyboard hook.** The format popup's Enter key was previously detected via a global pynput listener that received every keystroke (including passwords in other apps). It now uses a Qt-scoped `QShortcut` that only fires when the popup has focus.
+- ✅ **"Start with Windows" actually works now.** The checkbox was previously cosmetic; it now creates/removes a real shortcut in the Startup folder.
+- 🚫 **Single-instance check.** Launching a second copy shows a notification and exits cleanly — no more double-hotkey-fire or settings races.
+- 🔐 **Atomic settings & OUI writes.** Crashes mid-write no longer corrupt your configuration. Corrupt `settings.json` is renamed aside (not silently obliterated) so you can recover hand edits.
+- 🌐 **OUI download hardening.** Rejects HTML / captive-portal responses before they can overwrite the live database; cooperative shutdown of the download worker; preserves the prior database on rename failure.
+- 🎨 **Real `.ico` icon** (7 sizes) for the Windows executable; UPX disabled to reduce antivirus false positives.
+- ✏️ **Hotkey input is validated on Save** — gibberish is rejected with an inline error instead of being silently replaced by the default on next launch.
+
+See [`CHANGELOG.md`](CHANGELOG.md) `[2.4.0]` for the full per-finding list and [`docs/AUDIT-2026-05-14.md`](docs/AUDIT-2026-05-14.md) for the audit report.
+
 ---
 
 ## Features
@@ -48,17 +73,17 @@ The app cycles through 10 formats:
 
 ### Option 1: Windows Installer (Recommended)
 
-1. Download `MAC-Converter-Setup-v2.4.0.exe` from GitHub releases
+1. Go to **[https://aleled.github.io/mac-converter-2/](https://aleled.github.io/mac-converter-2/)** and click **Download for Windows**, OR grab `MAC-Converter-Setup-v2.4.0.exe` directly from the [Releases page](https://github.com/aleled/mac-converter-2/releases/latest)
 2. Run the installer and follow the wizard
 3. Choose optional features:
    - Desktop shortcut
-   - Start with Windows (autostart)
+   - Start with Windows (autostart — managed entirely by the app via a Startup-folder shortcut, no registry writes)
 4. App launches automatically after installation
 5. No admin rights required
 
 ### Option 2: Standalone Executable
 
-1. Download `MAC-Converter.exe` from GitHub releases
+1. Download `MAC-Converter.exe` from the [Releases page](https://github.com/aleled/mac-converter-2/releases/latest)
 2. Run the executable directly
 3. App will reside in system tray
 
@@ -185,14 +210,34 @@ mac-converter-2/
 ├── oui_lookup.py            # OUI vendor database (download, parse, lookup)
 ├── mac-converter.spec       # PyInstaller configuration
 ├── installer.iss            # Inno Setup installer script
-├── icon-v1.png              # App icon
+├── icon-v1.png              # App icon (source)
+├── icon-v1.ico              # App icon (multi-size, used by PyInstaller)
 ├── LICENSE.txt              # MIT License
-├── requirements.txt         # Python dependencies
+├── requirements.txt         # Python runtime dependencies
+├── requirements-dev.txt     # Python test dependencies (pytest)
+├── pytest.ini               # pytest configuration
+├── tests/                   # Regression test suite (mac_formats, oui_lookup, settings)
+├── docs/                    # GitHub Pages portal + audit + specs + plans
+│   ├── index.html           # Portal landing page
+│   ├── styles.css           # Portal stylesheet
+│   ├── AUDIT-2026-05-14.md  # Security & bug audit (37 findings)
+│   └── superpowers/         # Design specs and implementation plans
 ├── README.md                # This file
 ├── CHANGELOG.md             # Version history
+├── CONTRIBUTING.md          # Contribution guide
+├── SECURITY.md              # Security policy & vulnerability reporting
 ├── DEVELOPMENT_LOG.md       # Session notes
 └── TODO.md                  # Feature roadmap
 ```
+
+### Running the tests
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+The regression suite (24 tests) covers pure-logic fixes in `mac_formats.py`, `oui_lookup.py`, and settings I/O.
 
 ### Building Your Own Installer
 
@@ -280,15 +325,22 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ---
 
+## Quality & Testing
+
+- ✅ 24 automated regression tests (pytest) — green on every commit
+- ✅ Full security & bug audit completed for v2.4.0 (37 findings, all closed) — see [`docs/AUDIT-2026-05-14.md`](docs/AUDIT-2026-05-14.md)
+- ✅ Atomic file writes for settings and OUI database (no corruption under crash/race)
+- ✅ No system-wide keyboard hooks beyond the configurable hotkey itself
+- ✅ Single-instance enforcement
+- ✅ Graceful clipboard-error handling
+
+---
+
 ## Contributing
 
-To contribute:
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the contribution workflow, code-quality standards, and testing guidance.
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+For vulnerability reports, see [`SECURITY.md`](SECURITY.md).
 
 ---
 
@@ -298,11 +350,12 @@ MIT License - See [LICENSE.txt](LICENSE.txt) for details
 
 ---
 
-## Support
+## Support & Links
 
-For issues, questions, or suggestions:
-- GitHub Issues: https://github.com/aleled/mac-converter-2/issues
-- GitHub Repository: https://github.com/aleled/mac-converter-2
+- **Download portal:** [https://aleled.github.io/mac-converter-2/](https://aleled.github.io/mac-converter-2/)
+- **Releases:** [https://github.com/aleled/mac-converter-2/releases](https://github.com/aleled/mac-converter-2/releases)
+- **Issues:** [https://github.com/aleled/mac-converter-2/issues](https://github.com/aleled/mac-converter-2/issues)
+- **Repository:** [https://github.com/aleled/mac-converter-2](https://github.com/aleled/mac-converter-2)
 
 ---
 
