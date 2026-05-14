@@ -150,7 +150,6 @@
 ## Known Limitations
 
 - **Windows Only**: Primary platform is Windows 10/11
-- **Single Format Cycle**: Doesn't remember user-selected format between sessions (always resets to 0)
 - **No Batch Processing**: One MAC address at a time
 - **No History**: Previous conversions not stored
 - **No Update Mechanism**: Manual updates via GitHub

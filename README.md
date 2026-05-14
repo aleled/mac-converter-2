@@ -39,8 +39,8 @@ The app cycles through 10 formats:
 6. Dot-separated lowercase: `aabb.ccdd.eeff`
 7. Plain uppercase: `AABBCCDDEEFF`
 8. Plain lowercase: `aabbccddeeff`
-9. Windows format uppercase: `AA-BB-CC-DD-EE-FF` (alternate)
-10. Windows format lowercase: `aa-bb-cc-dd-ee-ff` (alternate)
+9. Hyphen-6char uppercase (Cisco-style): `AABBCC-DDEEFF`
+10. Hyphen-6char lowercase (Cisco-style): `aabbcc-ddeeff`
 
 ---
 
