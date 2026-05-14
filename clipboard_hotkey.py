@@ -119,6 +119,34 @@ def set_autostart_enabled(enabled):
             print(f"[ERROR] set_autostart_enabled(False): {e}", file=sys.stderr)
 
 
+# --- Single-instance mutex (Phase 2 fix for F25) ---
+
+_single_instance_mutex_handle = None  # held for process lifetime
+
+
+def acquire_single_instance_mutex():
+    """Try to acquire a named mutex. Returns True if this is the only instance.
+
+    Returns False if another instance already holds the mutex.
+    Returns True (allow-all) if pywin32 isn't importable, so the app
+    still works on systems without it.
+    """
+    global _single_instance_mutex_handle
+    try:
+        import win32event
+        import win32api
+        import winerror
+        _single_instance_mutex_handle = win32event.CreateMutex(
+            None, False, "Global\\MAC-Converter-2-SingleInstance"
+        )
+        last_err = win32api.GetLastError()
+        if last_err == winerror.ERROR_ALREADY_EXISTS:
+            return False
+        return True
+    except ImportError:
+        return True
+
+
 # --- Tray Icon Setup ---
 def get_icon_path():
     """
@@ -1778,6 +1806,21 @@ def main():
     """
     Main entry point. Starts the Qt application, tray icon, and hotkey listener. Runs the event loop.
     """
+    if not acquire_single_instance_mutex():
+        # Another instance is already running. Show a brief notification and exit.
+        app = QApplication(sys.argv)
+        from PyQt5.QtWidgets import QMessageBox
+        msg = QMessageBox()
+        msg.setWindowTitle("MAC Converter")
+        try:
+            msg.setWindowIcon(QIcon(get_icon_path()))
+        except Exception:
+            pass
+        msg.setText("MAC Converter is already running.")
+        msg.setIcon(QMessageBox.Information)
+        msg.exec_()
+        sys.exit(0)
+
     global listener, oui_db
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)  # Don't exit when dialogs close; tray manages lifecycle
