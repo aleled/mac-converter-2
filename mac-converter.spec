@@ -7,7 +7,15 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[('icon-v1.png', '.')],
-    hiddenimports=['pynput.keyboard._win32', 'pynput.mouse._win32'],
+    hiddenimports=[
+        'pynput.keyboard._win32',
+        'pynput.mouse._win32',
+        'pystray._win32',
+        'win32com.client',
+        'win32event',
+        'win32api',
+        'winerror',
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -31,7 +39,8 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    # F34: UPX disabled — trades ~30% binary size for far fewer AV false positives
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,
@@ -40,5 +49,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='icon-v1.png',
+    icon='icon-v1.ico',
 )
