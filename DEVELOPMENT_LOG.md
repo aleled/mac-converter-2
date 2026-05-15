@@ -337,3 +337,86 @@ Absorbed into Phase 2 commits 8 and 12. No standalone installer phase needed.
 - PR #1 open against `dev`: https://github.com/aleled/mac-converter-2/pull/1
 - Release v2.4.0 published: https://github.com/aleled/mac-converter-2/releases/tag/v2.4.0
 - Portal live: https://aleled.github.io/mac-converter-2/
+
+---
+
+## 2026-05-15 (Windows/PowerShell Session) — Portal fix, v2.4.1, v2.4.2, full documentation pass
+
+This session followed immediately after the 2026-05-14 v2.4.0 ship. Three issues emerged from user testing, plus a comprehensive documentation expansion request.
+
+### Issue 1: Portal returning 404
+
+The first GitHub Pages build of commit `7b725df` errored with "Page build failed" — Jekyll (which Pages runs by default) choked on the Markdown files in `docs/` (the 133 KB audit, the design specs, the implementation plans).
+
+**Fix:** added `docs/.nojekyll` (commit `166c2be`). The sentinel file tells GitHub Pages to skip Jekyll entirely and serve `docs/` as static files. The new build succeeded on first try. Portal went live at https://aleled.github.io/mac-converter-2/.
+
+### Issue 2: Enter doesn't show the vendor popup (first attempt — v2.4.1)
+
+User reported pressing Enter in the format popup didn't trigger vendor lookup. Initial diagnosis: the v2.4.0 F19 fix replaced the global pynput keyboard listener with a Qt-scoped `QShortcut`, but the popup is a `Qt.Tool` window that doesn't take keyboard focus on Windows.
+
+**First fix (v2.4.1, commit `34260e6`):** added `activateWindow()`, `raise_()`, `setFocus()`, and Win32 `SetForegroundWindow` calls after `show()`. Built and released v2.4.1.
+
+**Result:** insufficient. User reported the issue persisted in v2.4.1.
+
+### Issue 2 (cont): Real fix — v2.4.2
+
+Deeper diagnosis revealed three structural problems:
+
+1. `QDialog` default `focusPolicy` is `Qt.NoFocus` — `setFocus()` was a no-op because the dialog itself wasn't focusable.
+2. `SetForegroundWindow` was being rejected by Windows. The converter process didn't "receive the last input event" — pynput's `WH_KEYBOARD_LL` hook is passive, so the actual keypress went to the foreground app.
+3. `QShortcut` with `Qt.WidgetWithChildrenShortcut` only fires when the widget or a child has focus. With no focusable children and no focus on the dialog, the shortcut never fired.
+
+**Fix (v2.4.2, commit `fcd3cb3`):**
+
+- Set `Qt.StrongFocus` on `FormatSelectorPopup` so the dialog itself can receive keyboard focus.
+- Use `AttachThreadInput` to temporarily merge our thread's input queue with the foreground thread's, satisfying Windows' foreground-steal rules. Then `SetForegroundWindow` succeeds. Then detach.
+- Change `QShortcut` context to `Qt.ApplicationShortcut` so any active app window fires the shortcut.
+- Add `keyPressEvent` override on the popup for Enter and Escape as belt-and-suspenders.
+- Defer focus calls one event-loop tick via `QTimer.singleShot(0, _grab_focus)` so the window is fully realized before we grab focus.
+- Show a tray notification ("OUI database is still loading, try again in a moment") when Enter is pressed before the OUI database has finished loading, so the silent-rejection case is no longer invisible.
+
+Built and released v2.4.2 with both `.exe` artifacts. Portal auto-detected the release within 30 seconds. User confirmed: "working fine!"
+
+### Issue 3: Comprehensive documentation pass
+
+User requested that all project elements be documented in Markdown so that "if something breaks we know how it was working so far."
+
+**Deliverables (this session):**
+
+- **`ARCHITECTURE.md` (new, ~12 KB)** — module map, threading model (5 threads), data flow walkthroughs for the three key user paths (hotkey → popup, popup → vendor lookup, OUI download), file locations, 8 key design decisions with their rationale (no-admin constraint, tool-window focus saga, atomic writes + lock, single-instance mutex, OUI HTML rejection, cooperative worker shutdown, Startup-folder autostart, ApplicationShortcut vs WidgetWithChildren), test architecture, security boundaries, known limitations, "where to look when something breaks" table.
+
+- **`TROUBLESHOOTING.md` (new, ~7 KB)** — user-facing diagnostic guide. Sections: hotkey not working, format popup but no vendor, app won't start, unknown vendor, OUI download failures, autostart not surviving reboot, antivirus warnings, tray icon missing, layout glitches, backup/restore, uninstall leftovers, corrupt-settings files, verbose logging.
+
+- **`BUILDING.md` (new, ~6 KB)** — detailed build guide. Prerequisites table, one-time setup, regenerate .ico, build the standalone exe, build the installer, cut a release (version bump checklist, CHANGELOG, full test run, build, smoke test, commit, tag, gh release create), build troubleshooting.
+
+- **`README.md` significantly expanded** — every feature gets a deep paragraph (tray utility, auto-cycling, hotkey, clipboard, format popup, OUI lookup, database management, dark theme, Settings dialog, About dialog, persistence, no-admin, single-instance, pytest), full per-setting reference table, "How it works in 60 seconds" architecture summary, file locations table, documentation map linking all the other docs.
+
+- **`TODO.md` updated** — Milestone 13 (v2.4.1 + v2.4.2 patches), Milestone 14 (documentation pass), Recent Changes section restructured.
+
+- **`DEVELOPMENT_LOG.md`** (this entry).
+
+### Commits this session
+
+1. `166c2be` — `fix(pages): add .nojekyll to disable Jekyll processing`
+2. `34260e6` — `fix(ui): restore Enter-to-vendor-lookup; release v2.4.1` (insufficient)
+3. `fcd3cb3` — `fix(ui): land Enter-to-vendor-lookup properly; release v2.4.2`
+4. (this commit) — `docs: comprehensive documentation pass — ARCHITECTURE, TROUBLESHOOTING, BUILDING, expanded README`
+
+### Branch state at session end
+
+- Branch: `claude/eloquent-payne-7d7c9c`
+- PR #1 still open against `dev` with all 2026-05-14 + 2026-05-15 work
+- Releases live: v2.4.0, v2.4.1, v2.4.2
+- Portal live and serving v2.4.2 as the latest download
+- 24/24 pytest tests green
+- Documentation: README + ARCHITECTURE + TROUBLESHOOTING + BUILDING + CHANGELOG + CONTRIBUTING + SECURITY + TODO + DEVELOPMENT_LOG + docs/AUDIT + docs/superpowers/specs + docs/superpowers/plans + docs/README
+
+### Lessons learned
+
+- **Windows focus mechanics are subtle.** Three things had to be right simultaneously for the Enter key to work on a `Qt.Tool` popup: dialog focus policy, the Win32 foreground-steal rules, and the `QShortcut` context. Missing any one of them silently broke the feature. Documenting this in ARCHITECTURE.md § 6.2 is essential — anyone who refactors `show_format_popup` in the future needs to preserve all three.
+
+- **Jekyll-by-default on GitHub Pages is a footgun for repos with technical Markdown.** The audit document had section headers with brackets like `[CRITICAL]` and bracketed F-IDs that Jekyll's Liquid templating tried to parse. `.nojekyll` is the standard prophylactic — should be added to any `/docs` folder that contains arbitrary `.md` files.
+
+- **Tray notifications for silent-failure paths are cheap insurance.** The v2.4.2 "OUI database is still loading" notification eliminates a confusing user experience for ~$0 of engineering cost. Worth applying this pattern everywhere a function early-returns under unusual conditions.
+
+- **Subagent-driven development can't fully cover UI fixes.** The F19 → focus-saga sequence happened because the audit subagent for clipboard_hotkey.py Part 4 (Task 7) correctly identified the global pynput listener as a privacy concern, and the fix subagent for Phase 2 Task 10 correctly removed it — but neither could test the resulting UI behavior on Windows. The focus regression was only caught by the user running the actual installer. Future audits should explicitly call out "this change needs UI verification" for any code that touches focus, window flags, or event filtering.

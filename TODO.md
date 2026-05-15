@@ -112,11 +112,25 @@
 - [x] Auto-fetches latest release via the GitHub API with graceful fallback to "Coming soon"
 - [x] Operator instructions at `docs/README.md`
 - [x] Pages enabled in repo Settings → Pages, serving from `/docs`
+- [x] `.nojekyll` added so Pages serves the folder as static files (Jekyll was choking on the audit markdown)
 - [x] Live at **https://aleled.github.io/mac-converter-2/**
+
+### ✅ Milestone 13: Post-release UX patches (v2.4.1 + v2.4.2)
+- [x] v2.4.1: first attempt at fixing the Enter-to-vendor focus regression — added `activateWindow()`, `setFocus()`, and `SetForegroundWindow` after `.show()`. Insufficient on its own.
+- [x] v2.4.2: full fix — `Qt.StrongFocus` policy on `FormatSelectorPopup`, `AttachThreadInput` trick to satisfy Windows' foreground-steal rules, `Qt.ApplicationShortcut` context for the `QShortcut`, plus a `keyPressEvent` override on the popup as belt-and-suspenders
+- [x] v2.4.2: tray notification when Enter is pressed before the OUI database has loaded ("OUI database is still loading, try again in a moment") so the case is no longer silent
+- [x] v2.4.2 release built and published with both `.exe` artifacts; portal auto-detected within 30s
+
+### ✅ Milestone 14: Comprehensive documentation pass (v2.4.2)
+- [x] `ARCHITECTURE.md` — module-by-module code walkthrough, threading model, data flow, key design decisions with rationale, "where to look when something breaks"
+- [x] `TROUBLESHOOTING.md` — user-facing diagnostic guide for hotkey conflicts, OUI download failures, antivirus, autostart, corrupt settings, etc.
+- [x] `BUILDING.md` — detailed build instructions (PyInstaller + Inno Setup), one-time setup, release process, build troubleshooting
+- [x] README significantly expanded — per-feature deep documentation, settings reference table, "How it works in 60 seconds", file locations table, documentation map
+- [x] TODO + DEVELOPMENT_LOG updated with v2.4.1, v2.4.2, and Milestone 14 entries
 
 ---
 
-## Current Release (v2.4.0)
+## Current Release (v2.4.2)
 
 **Status:** Production Ready ✅
 
@@ -141,8 +155,8 @@
 
 ### Build Artifacts
 - Standalone executable: `dist/MAC-Converter.exe` (~51 MB, real `.ico` icon embedded)
-- Windows installer: `installer-output/MAC-Converter-Setup-v2.4.0.exe` (~54 MB, single-source-of-truth autostart)
-- Source code: clean, audited, tested
+- Windows installer: `installer-output/MAC-Converter-Setup-v2.4.2.exe` (~54 MB, single-source-of-truth autostart)
+- Source code: clean, audited, tested, fully documented (ARCHITECTURE.md, TROUBLESHOOTING.md, BUILDING.md, etc.)
 
 ---
 
@@ -197,7 +211,19 @@
 
 ---
 
-## Recent Changes (Session: 2026-05-14 — v2.4.0 audit, fixes, portal)
+## Recent Changes (Session: 2026-05-15 — v2.4.2 release + comprehensive documentation pass)
+
+### What Was Done (continued from 2026-05-14 session)
+- ✅ Diagnosed and fixed the Enter-to-vendor-lookup regression: shipped v2.4.1 (first focus-grab attempt) and v2.4.2 (full fix with `Qt.StrongFocus` + `AttachThreadInput` + `Qt.ApplicationShortcut` + `keyPressEvent`)
+- ✅ Added tray notification when OUI database isn't loaded yet (no more silent Enter)
+- ✅ Created `ARCHITECTURE.md` — full module-by-module code walkthrough with design rationale and "where to look when something breaks"
+- ✅ Created `TROUBLESHOOTING.md` — user-facing diagnostic guide
+- ✅ Created `BUILDING.md` — detailed build instructions
+- ✅ Significantly expanded `README.md` — per-feature deep documentation, settings reference table, file locations, documentation map
+- ✅ Updated TODO + DEVELOPMENT_LOG with Milestones 13 and 14
+- ✅ Pages portal `.nojekyll` fix (first build was erroring because Jekyll choked on the audit markdown)
+
+## Earlier in this engagement (Session: 2026-05-14 — v2.4.0 audit, fixes, portal)
 
 ### What Was Done
 - ✅ Conducted full security & bug audit of the repository (37 findings: 5 HIGH, 12 MEDIUM, 20 LOW); report at `docs/AUDIT-2026-05-14.md`
