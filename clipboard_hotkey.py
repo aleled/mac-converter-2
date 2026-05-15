@@ -273,6 +273,21 @@ def show_format_popup(app, formats, current_index, duration_seconds, mac_normali
     current_format_popup = FormatSelectorPopup(formats, current_index, duration_seconds, mac_normalized)
     current_format_popup.show()
 
+    # Force keyboard focus to the popup so the Qt-scoped Enter QShortcut
+    # actually fires (post-F19). Without this, Windows' focus-stealing
+    # prevention leaves focus on whatever app the user was typing in.
+    # The hotkey thread just received the user's input, so SetForegroundWindow
+    # is allowed by Windows' foreground-steal rules.
+    current_format_popup.activateWindow()
+    current_format_popup.raise_()
+    current_format_popup.setFocus()
+    try:
+        import ctypes
+        hwnd = int(current_format_popup.winId())
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+    except Exception:
+        pass  # best-effort; activateWindow above usually suffices
+
 
 def show_error_popup(app, message, duration_seconds):
     """
@@ -453,7 +468,7 @@ class AboutDialog(QDialog):
         layout.addWidget(app_name)
 
         # Version
-        version_label = QLabel("Version 2.4.0")
+        version_label = QLabel("Version 2.4.1")
         version_label.setAlignment(Qt.AlignCenter)
         version_label.setStyleSheet("color: #999999; font-size: 10pt;")
         layout.addWidget(version_label)
@@ -1759,7 +1774,7 @@ DEFAULT_SETTINGS = {
     'notification_duration': 3,          # Notification display seconds
     'author': 'Alejandro Lichtenfeld',   # Correct author name
     'license': 'MIT',
-    'about': 'MAC Address Converter Utility v2.4.0\nAuthor: Alejandro Lichtenfeld\nLicense: MIT\nhttps://github.com/aleled/mac-converter-2',
+    'about': 'MAC Address Converter Utility v2.4.1\nAuthor: Alejandro Lichtenfeld\nLicense: MIT\nhttps://github.com/aleled/mac-converter-2',
     'oui_enabled': True,                 # Enable OUI vendor lookup
     'oui_auto_update': True,             # Auto-download OUI database when stale
     'oui_update_interval_days': 7,       # Days before OUI database is considered stale

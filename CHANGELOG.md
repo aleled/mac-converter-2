@@ -5,6 +5,10 @@
 
 # Changelog
 
+## [2.4.1] - 2026-05-15
+### Fixed
+- **Enter-to-vendor-lookup flow restored.** v2.4.0's F19 fix replaced the global pynput keyboard listener with a Qt-scoped `QShortcut`, but the popup is a `Qt.Tool` window that didn't take keyboard focus on Windows (focus-stealing prevention kept it on whichever app the user was typing in). The QShortcut therefore never fired and pressing Enter did nothing. `show_format_popup` now explicitly calls `activateWindow()`, `raise_()`, `setFocus()`, and Win32 `SetForegroundWindow` after `.show()` so the popup actually receives focus and the Enter key reaches its handler.
+
 ## [2.4.0] - 2026-05-14
 ### Added
 - pytest regression suite (`tests/`) covering pure-logic fixes in `mac_formats.py`, `oui_lookup.py`, and settings I/O. Dev deps in `requirements-dev.txt`.
