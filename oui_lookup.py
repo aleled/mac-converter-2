@@ -68,7 +68,7 @@ class OUIDatabase:
                 progress_callback("Connecting to IEEE...")
 
             req = urllib.request.Request(OUI_URL, headers={
-                'User-Agent': 'MAC-Converter/2.4.1'
+                'User-Agent': 'MAC-Converter/2.4.2'
             })
 
             with urllib.request.urlopen(req, timeout=30) as response:

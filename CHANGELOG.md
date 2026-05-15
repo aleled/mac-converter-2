@@ -5,6 +5,15 @@
 
 # Changelog
 
+## [2.4.2] - 2026-05-15
+### Fixed
+- **Enter-to-vendor-lookup actually works now.** v2.4.1's first attempt at fixing the post-F19 focus regression set the popup focus and called `SetForegroundWindow`, but `SetForegroundWindow` was rejected by Windows because the converter process didn't "receive the last input event" (pynput's hook is passive). Also, `QDialog`'s default focus policy is `Qt.NoFocus`, so even when `setFocus()` was called nothing was actually focusable. Three changes land the fix:
+  1. `FormatSelectorPopup` sets `Qt.StrongFocus` so it can actually receive keyboard focus.
+  2. `show_format_popup` defers focus calls one event-loop tick and uses the `AttachThreadInput` trick to satisfy Windows' foreground-steal rules.
+  3. The `QShortcut` context is changed from `WidgetWithChildrenShortcut` to `ApplicationShortcut`, so Enter triggers vendor lookup whenever any of the app's windows is active.
+- **Added a `keyPressEvent` override on the format popup** (belt-and-suspenders alongside the `QShortcut`) so Enter and Escape work the moment the popup has focus.
+- **OUI-not-loaded path is no longer silent.** If you press Enter before the OUI database has finished loading, a tray notification surfaces "OUI database is still loading, try again in a moment" instead of doing nothing.
+
 ## [2.4.1] - 2026-05-15
 ### Fixed
 - **Enter-to-vendor-lookup flow restored.** v2.4.0's F19 fix replaced the global pynput keyboard listener with a Qt-scoped `QShortcut`, but the popup is a `Qt.Tool` window that didn't take keyboard focus on Windows (focus-stealing prevention kept it on whichever app the user was typing in). The QShortcut therefore never fired and pressing Enter did nothing. `show_format_popup` now explicitly calls `activateWindow()`, `raise_()`, `setFocus()`, and Win32 `SetForegroundWindow` after `.show()` so the popup actually receives focus and the Enter key reaches its handler.

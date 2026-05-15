@@ -273,20 +273,46 @@ def show_format_popup(app, formats, current_index, duration_seconds, mac_normali
     current_format_popup = FormatSelectorPopup(formats, current_index, duration_seconds, mac_normalized)
     current_format_popup.show()
 
-    # Force keyboard focus to the popup so the Qt-scoped Enter QShortcut
-    # actually fires (post-F19). Without this, Windows' focus-stealing
-    # prevention leaves focus on whatever app the user was typing in.
-    # The hotkey thread just received the user's input, so SetForegroundWindow
-    # is allowed by Windows' foreground-steal rules.
-    current_format_popup.activateWindow()
-    current_format_popup.raise_()
-    current_format_popup.setFocus()
-    try:
-        import ctypes
-        hwnd = int(current_format_popup.winId())
-        ctypes.windll.user32.SetForegroundWindow(hwnd)
-    except Exception:
-        pass  # best-effort; activateWindow above usually suffices
+    # Force keyboard focus to the popup so Enter reaches its handler
+    # (post-F19, where the system-wide pynput listener was removed).
+    #
+    # Windows blocks SetForegroundWindow from a process that didn't
+    # receive the last user input event — pynput's hook is passive, so
+    # the converter process doesn't count. The AttachThreadInput trick
+    # temporarily merges our input queue with the foreground thread's,
+    # which lets SetForegroundWindow succeed. Deferred one event-loop
+    # tick so the window is fully realized when we grab focus.
+    def _grab_focus():
+        popup = current_format_popup
+        if popup is None:
+            return
+        try:
+            import ctypes
+            u32 = ctypes.windll.user32
+            k32 = ctypes.windll.kernel32
+            fg_hwnd = u32.GetForegroundWindow()
+            fg_thread = u32.GetWindowThreadProcessId(fg_hwnd, None) if fg_hwnd else 0
+            my_thread = k32.GetCurrentThreadId()
+            attached = False
+            if fg_thread and fg_thread != my_thread:
+                attached = bool(u32.AttachThreadInput(fg_thread, my_thread, True))
+            try:
+                hwnd = int(popup.winId())
+                u32.SetForegroundWindow(hwnd)
+                u32.BringWindowToTop(hwnd)
+            finally:
+                if attached:
+                    u32.AttachThreadInput(fg_thread, my_thread, False)
+        except Exception:
+            pass
+        try:
+            popup.activateWindow()
+            popup.raise_()
+            popup.setFocus()
+        except Exception:
+            pass
+
+    QTimer.singleShot(0, _grab_focus)
 
 
 def show_error_popup(app, message, duration_seconds):
@@ -468,7 +494,7 @@ class AboutDialog(QDialog):
         layout.addWidget(app_name)
 
         # Version
-        version_label = QLabel("Version 2.4.1")
+        version_label = QLabel("Version 2.4.2")
         version_label.setAlignment(Qt.AlignCenter)
         version_label.setStyleSheet("color: #999999; font-size: 10pt;")
         layout.addWidget(version_label)
@@ -1295,6 +1321,11 @@ class FormatSelectorPopup(QDialog):
             Qt.Tool
         )
 
+        # QDialog default focus policy is NoFocus, so setFocus()/QShortcut
+        # wouldn't fire even when activateWindow succeeds. StrongFocus lets
+        # the dialog itself receive keyboard focus.
+        self.setFocusPolicy(Qt.StrongFocus)
+
         # Layout
         layout = QVBoxLayout()
         layout.setContentsMargins(15, 15, 15, 15)
@@ -1415,14 +1446,17 @@ class FormatSelectorPopup(QDialog):
         # Position near bottom-right (near system tray)
         self.position_near_tray()
 
-        # F19: scope Enter handling to this popup widget via QShortcut.
-        # Previously a global pynput.keyboard.Listener was used, which
-        # captured every keystroke system-wide while the popup was open.
+        # F19: scope Enter handling to this app via QShortcut (no system-wide
+        # pynput listener — that would capture every keystroke in every app).
+        # Qt.ApplicationShortcut fires when any of THIS APP'S windows is the
+        # active window, which sidesteps the QDialog-needs-focus-on-a-child
+        # subtlety. The keyPressEvent override below is a belt-and-suspenders
+        # fallback that fires when the popup itself has keyboard focus.
         self._enter_shortcut = QShortcut(QKeySequence(Qt.Key_Return), self)
-        self._enter_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self._enter_shortcut.setContext(Qt.ApplicationShortcut)
         self._enter_shortcut.activated.connect(self._on_enter_pressed)
         self._enter_shortcut_pad = QShortcut(QKeySequence(Qt.Key_Enter), self)
-        self._enter_shortcut_pad.setContext(Qt.WidgetWithChildrenShortcut)
+        self._enter_shortcut_pad.setContext(Qt.ApplicationShortcut)
         self._enter_shortcut_pad.activated.connect(self._on_enter_pressed)
 
     def _on_enter_pressed(self):
@@ -1434,12 +1468,40 @@ class FormatSelectorPopup(QDialog):
         mac = getattr(self, 'mac_normalized', None)
         if not mac:
             return
-        if not (settings.get('oui_enabled', True) and oui_db and oui_db.is_loaded):
+        if not settings.get('oui_enabled', True):
+            return
+        if not (oui_db and oui_db.is_loaded):
+            # Surface this to the user instead of silently doing nothing —
+            # otherwise it looks like Enter is broken.
+            try:
+                if tray_icon and tray_icon_ready.is_set():
+                    tray_icon.notify("OUI database is still loading, try again in a moment.", "MAC Converter")
+            except Exception:
+                pass
             return
         vendor_lookup_request_queue.put({
             'mac_normalized': mac,
         })
         self.close()
+
+    def keyPressEvent(self, event):
+        """Belt-and-suspenders Enter/Escape handler.
+
+        Fires when the popup widget has keyboard focus. Works in concert
+        with the application-level QShortcut bound in __init__ — whichever
+        fires first triggers the same handler, and the second is a no-op
+        because the popup closes itself afterward.
+        """
+        key = event.key()
+        if key in (Qt.Key_Return, Qt.Key_Enter):
+            self._on_enter_pressed()
+            event.accept()
+            return
+        if key == Qt.Key_Escape:
+            self.close()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def position_near_tray(self):
         """Position the popup near the system tray (bottom-right corner)."""
@@ -1774,7 +1836,7 @@ DEFAULT_SETTINGS = {
     'notification_duration': 3,          # Notification display seconds
     'author': 'Alejandro Lichtenfeld',   # Correct author name
     'license': 'MIT',
-    'about': 'MAC Address Converter Utility v2.4.1\nAuthor: Alejandro Lichtenfeld\nLicense: MIT\nhttps://github.com/aleled/mac-converter-2',
+    'about': 'MAC Address Converter Utility v2.4.2\nAuthor: Alejandro Lichtenfeld\nLicense: MIT\nhttps://github.com/aleled/mac-converter-2',
     'oui_enabled': True,                 # Enable OUI vendor lookup
     'oui_auto_update': True,             # Auto-download OUI database when stale
     'oui_update_interval_days': 7,       # Days before OUI database is considered stale
