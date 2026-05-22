@@ -1,7 +1,7 @@
 # TODO / Feature Tracker
 
-**Current Version:** 2.4.0 (Production Ready)
-**Last Updated:** 2026-05-14
+**Current Version:** 2.5.0 (Production Ready)
+**Last Updated:** 2026-05-22
 
 ---
 
@@ -128,9 +128,26 @@
 - [x] README significantly expanded — per-feature deep documentation, settings reference table, "How it works in 60 seconds", file locations table, documentation map
 - [x] TODO + DEVELOPMENT_LOG updated with v2.4.1, v2.4.2, and Milestone 14 entries
 
+### ✅ Milestone 15: Corporate-network TLS support + manual OUI import (v2.4.3)
+- [x] Added `truststore` package — Python `urllib` now uses Windows' certificate store, fixing `CERTIFICATE_VERIFY_FAILED` failures on corporate networks with TLS-intercepting proxies (Zscaler, Palo Alto, FortiGate, Cisco Umbrella, etc.)
+- [x] `truststore.inject_into_ssl()` called at `oui_lookup` module load — same approach pip uses
+- [x] New "Import from file…" button in Settings → OUI section — fallback for locked-down environments where even `truststore` isn't enough; validates the file, atomically replaces the live database, reloads
+- [x] Updated `requirements.txt` and `mac-converter.spec` (`truststore` added as hidden import for the PyInstaller exe)
+- [x] CHANGELOG `[2.4.3]` section added
+
+### ✅ Milestone 16: Startup Update Check (v2.5.0)
+- [x] New `update_check.py` module — pure logic, no Qt dependency, mirrors the `oui_lookup.py` pattern
+- [x] `APP_VERSION` consolidated as single source of truth (replaces three previously-hardcoded version strings across `clipboard_hotkey.py` and `oui_lookup.py`)
+- [x] GitHub Releases API integration; TLS via the truststore injection from `oui_lookup.py` (the new module inherits it for free)
+- [x] Modal QMessageBox prompt with Upgrade / Skip buttons; Upgrade opens the portal in the default browser and exits the app so the installer can replace the running exe
+- [x] Defensive error handling — all failure paths return `None` silently, no popups for offline / rate-limited / network-broken cases
+- [x] 10 new pytest regression tests (`_parse_version` + `check_for_update` happy/error paths)
+- [x] Module-level `_update_timer` cleaned up in `on_quit` (matches F27 pattern)
+- [x] CHANGELOG `[2.5.0]` section, README, ARCHITECTURE, TROUBLESHOOTING, DEVELOPMENT_LOG updates
+
 ---
 
-## Current Release (v2.4.2)
+## Current Release (v2.5.0)
 
 **Status:** Production Ready ✅
 
@@ -155,12 +172,12 @@
 
 ### Build Artifacts
 - Standalone executable: `dist/MAC-Converter.exe` (~51 MB, real `.ico` icon embedded)
-- Windows installer: `installer-output/MAC-Converter-Setup-v2.4.2.exe` (~54 MB, single-source-of-truth autostart)
+- Windows installer: `installer-output/MAC-Converter-Setup-v2.5.0.exe` (~54 MB, single-source-of-truth autostart, startup update check)
 - Source code: clean, audited, tested, fully documented (ARCHITECTURE.md, TROUBLESHOOTING.md, BUILDING.md, etc.)
 
 ---
 
-## Future Enhancements (v2.5.0+)
+## Future Enhancements (v2.6.0+)
 
 ### Potential Features
 - [ ] Tray history of recent conversions
@@ -302,7 +319,7 @@ pyinstaller mac-converter.spec
 
 ---
 
-**Last Updated:** 2026-05-14
+**Last Updated:** 2026-05-22
 **Maintained By:** Alejandro Lichtenfeld
 **Repository:** https://github.com/aleled/mac-converter-2
 **Download portal:** https://aleled.github.io/mac-converter-2/

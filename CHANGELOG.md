@@ -5,6 +5,17 @@
 
 # Changelog
 
+## [2.5.0] - 2026-05-22
+### Added
+- **Startup update check.** On launch, the app fetches the latest release tag from the GitHub Releases API (about 2 seconds after the tray icon is up, in a background daemon thread). If a newer version exists, a modal prompt appears with Upgrade and Skip buttons. Upgrade opens the GitHub Pages download portal in the user's default browser and exits the app so the installer can replace the running exe. Skip dismisses for the current session; the next launch re-checks.
+- **New module `update_check.py`** — pure logic, no Qt dependency, mirrors the `oui_lookup.py` pattern. Single source of truth for `APP_VERSION` (consolidated from three previously-hardcoded sites). All failure paths return `None` silently — offline, rate-limited, malformed-tag cases never surface a user-visible error at startup.
+- **10 new pytest regression tests** for `_parse_version` (v-prefix, no-prefix, prerelease suffix, two-segment, garbage) and `check_for_update` (no-update, newer-release, URLError, HTTPError, malformed-tag).
+
+### Changed
+- `clipboard_hotkey.py` and `oui_lookup.py` now read the version string from `update_check.APP_VERSION` instead of hardcoded literals — future version bumps touch one Python file instead of three.
+- `on_quit` explicitly stops the new `_update_timer` (matches the F27 cleanup pattern from the v2.4.0 audit).
+- truststore's SSL injection in `oui_lookup.py` also covers the new GitHub API call — both endpoints use Windows' certificate store transparently.
+
 ## [2.4.3] - 2026-05-15
 ### Fixed
 - **OUI database download works in corporate networks now.** Many corporate environments use TLS-intercepting proxies (Zscaler, Palo Alto, FortiGate, Cisco Umbrella, etc.) that re-sign HTTPS with a self-signed CA root. Windows trusts that CA (because the corporate IT department installed it), but Python's `urllib` was using its bundled CA list instead and failing with `CERTIFICATE_VERIFY_FAILED`. Added the `truststore` package and `truststore.inject_into_ssl()` at module load — `urllib` now uses Windows' certificate store, the same way every browser does. Same approach pip itself uses internally.

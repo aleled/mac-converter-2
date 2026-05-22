@@ -420,3 +420,40 @@ User requested that all project elements be documented in Markdown so that "if s
 - **Tray notifications for silent-failure paths are cheap insurance.** The v2.4.2 "OUI database is still loading" notification eliminates a confusing user experience for ~$0 of engineering cost. Worth applying this pattern everywhere a function early-returns under unusual conditions.
 
 - **Subagent-driven development can't fully cover UI fixes.** The F19 → focus-saga sequence happened because the audit subagent for clipboard_hotkey.py Part 4 (Task 7) correctly identified the global pynput listener as a privacy concern, and the fix subagent for Phase 2 Task 10 correctly removed it — but neither could test the resulting UI behavior on Windows. The focus regression was only caught by the user running the actual installer. Future audits should explicitly call out "this change needs UI verification" for any code that touches focus, window flags, or event filtering.
+
+---
+
+## 2026-05-22 (Windows/PowerShell Session) — v2.4.3 + v2.5.0
+
+Two patch/minor releases in one session, both driven by user-reported issues.
+
+### v2.4.3 — Corporate-network TLS interception
+
+User on a corporate network reported the OUI download failing with `[SSL: CERTIFICATE_VERIFY_FAILED] self-signed certificate in certificate chain`. Their environment used a TLS-intercepting proxy that re-signed HTTPS with a self-signed CA root — trusted by Windows (because IT installed it) but not by Python's bundled CA list.
+
+**Fix (commits leading to v2.4.3):** added the `truststore` package, which makes `ssl.create_default_context()` use the OS trust store. Same approach pip uses. `truststore.inject_into_ssl()` is called at `oui_lookup` module load; all subsequent `urllib` HTTPS calls use Windows' cert store automatically.
+
+**Belt-and-suspenders:** added an "Import from file…" button to Settings → OUI section. Lets the user point at a `oui.csv` they downloaded via their browser (which uses Windows' cert store and handles the corp CA fine). The app validates the file, atomically replaces the live database, and reloads.
+
+### v2.5.0 — Startup update check
+
+User requested an update-check-on-startup feature. Five-task implementation following the plan at `docs/superpowers/plans/2026-05-22-update-check.md`:
+
+1. New `update_check.py` module — `APP_VERSION = "2.5.0"`, `check_for_update()` returning dict-or-None, `_parse_version()` for tuple comparison. 10 pytest regression tests cover prefix handling, prerelease suffixes, garbage input, and all error paths (URLError, HTTPError, malformed tag, no-update, newer-release).
+2. Consolidate `clipboard_hotkey.py` and `oui_lookup.py` version strings to read from `APP_VERSION`. Three previously-hardcoded sites now flow through one constant.
+3. Wire into Qt: queue + daemon worker + 1Hz QTimer poll + session-guard flag + main() hook + on_quit cleanup.
+4. Replace the stub `show_update_prompt` with a real modal QMessageBox. Upgrade opens the portal via `QDesktopServices.openUrl` and calls `on_quit` so the installer can replace the running exe.
+5. Version bump to 2.5.0 + CHANGELOG `[2.5.0]` + doc updates (README "What's new", ARCHITECTURE threading-model row + § 6.8 design decision + § 12 entry, TROUBLESHOOTING "I never see the update prompt", TODO Milestone 16).
+
+### Architecture observations from this session
+
+- **`update_check.py` benefits for free from `oui_lookup.py`'s truststore injection.** Because Python's `ssl` module is monkey-patched at `oui_lookup` import time, any subsequent module that uses `urllib` (including the new `update_check`) inherits the Windows-cert-store behavior. Module load order matters: `oui_lookup` is imported by `clipboard_hotkey` early, before `update_check` does its first network call. If the load order ever changes, document the dependency.
+- **Three previously-hardcoded version strings should have been a single constant from day one.** The consolidation in v2.5.0 means future bumps touch one Python file instead of three. The remaining bumps (installer.iss, README, TODO, CHANGELOG) are non-Python and inevitable.
+- **"Open portal + exit" beats "auto-download installer" for the Upgrade flow.** Explicitly documented in ARCHITECTURE.md § 6.8 so future contributors don't second-guess it. Auto-download would re-introduce a class of failures (AV interception of the temp .exe, partial downloads, retry logic) that the existing "freshly downloaded installer over running exe" pattern already handles.
+
+### Session output
+
+- `update_check.py`, `tests/test_update_check.py`
+- Commits: `bc6e09a` (module + tests), `a6b343c` (version consolidation), `77aea78` (Qt integration), `dc73301` (QMessageBox UI). Doc-pass commit + version bump + release follow.
+- Releases: v2.4.3, v2.5.0
+- All 34 pytest tests green throughout

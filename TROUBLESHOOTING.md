@@ -221,6 +221,19 @@ When running the installed exe, there's no easy way to capture stderr (the exe i
 
 ---
 
+## I never see the update prompt at startup
+
+**Most common cause:** you're already on the latest version. The prompt only appears when GitHub reports a newer release. Right-click tray → About → check your version against [the Releases page](https://github.com/aleled/mac-converter-2/releases).
+
+**If you know there's a newer version and the prompt still doesn't appear:**
+
+1. The GitHub API call may have failed silently. Run the app from a terminal (`python clipboard_hotkey.py` from source, or attach a console to the exe) and watch stderr for `[update_check]` messages.
+2. GitHub API rate-limits unauthenticated requests to 60/hour per IP. If you're behind a NAT with many other developers, you may hit the limit. Wait an hour and relaunch.
+3. Your corporate firewall may be blocking `api.github.com` even though `github.com` itself is allowed. Test with `curl https://api.github.com/repos/aleled/mac-converter-2/releases/latest` from a terminal.
+4. If you clicked Skip in this session, the prompt is suppressed until you quit and relaunch the app. There's no persistent skip — restarting the app re-checks.
+
+---
+
 ## My issue isn't here
 
 1. Open the [GitHub Issues page](https://github.com/aleled/mac-converter-2/issues) and check for similar reports.

@@ -82,6 +82,7 @@ Five threads are alive in steady state. Each is named here for clarity even thou
 | **pystray tray icon** | `tray_app()` | Process lifetime, `icon.stop()` on quit | Renders the icon, handles right-click menu. Triggers menu actions which run on this thread; they `*_dialog_request_queue.put()` to hand off to the Qt main thread. |
 | **OUI auto-update worker** | spawned by the auto-update logic, optional, daemon | One-shot per startup or scheduled refresh | Calls `oui_lookup.download()` and `oui_lookup.load()`. Reports progress via `oui_download_progress_queue` or `oui_status_queue`. |
 | **OUI manual update worker** | `OUIDownloadDialog._start_download` | One-shot per "Update" button click | Same as above, scoped to a single dialog. Honors `cancel_event` on dialog close. |
+| **Update-check worker** | spawned by `_start_update_check` 2s after `main()`, daemon | One-shot per launch | Calls `update_check.check_for_update()`. On result, `update_check_queue.put(result)`. Never touches Qt. |
 
 ### Invariants
 
@@ -231,13 +232,21 @@ v2.4.0 chose the Startup-folder shortcut as the single source of truth. `set_aut
 
 **Don't reintroduce both mechanisms** without a deliberate plan — F31 was specifically about avoiding that footgun.
 
-### 6.8 Qt.ApplicationShortcut > Qt.WidgetWithChildrenShortcut
+### 6.8 Update check opens the portal instead of auto-downloading
+
+The startup update prompt's "Upgrade" button opens the GitHub Pages download portal in the user's default browser, then calls `on_quit` to exit the running app. It does **not** download the installer itself.
+
+Why: the user's browser uses Windows' certificate store natively and handles corporate TLS-intercepting proxies (Zscaler, FortiGate, etc.) fine — the same reason we recommended manual browser downloads as the OUI fallback before v2.4.3's truststore work. Auto-downloading the installer from inside the app would re-introduce a class of failures (partial downloads, AV interception of the temp .exe, rate limits, retry logic) that the existing Inno Setup installer-over-running-exe pattern already handles cleanly when the user starts from a freshly-downloaded `.exe`.
+
+The trade-off is one extra click for the user (download → run installer) in exchange for substantially less code surface inside our app and zero compatibility complications with whatever endpoint security is in place. If user feedback shows that the extra click is friction, the auto-download path can be added in a future version on top of the existing infrastructure (a `urllib` GET to the asset URL, a `subprocess.Popen` of the downloaded exe, exit) — but ship the simple version first.
+
+### 6.9 Qt.ApplicationShortcut > Qt.WidgetWithChildrenShortcut
 
 For the format popup's Enter key handling, the natural Qt choice is `Qt.WidgetWithChildrenShortcut` (the shortcut fires only when the widget or a child has focus — properly scoped to this popup). But `QDialog` defaults to `Qt.NoFocus` policy, so the dialog itself can't have focus, and the dialog has no focusable child widgets (labels are not focusable by default). The shortcut just never fires.
 
 Setting `Qt.StrongFocus` solves the policy issue. `Qt.ApplicationShortcut` solves the "any app window is active" case as a fallback — this is wider than ideal but safe because the only shortcut bound this way is on the format popup, which is short-lived.
 
-### 6.9 Single monolithic clipboard_hotkey.py
+### 6.10 Single monolithic clipboard_hotkey.py
 
 The file is ~1850 lines. Splitting it has been considered. The arguments for splitting are:
 
@@ -328,6 +337,7 @@ The pynput hotkey is the only Win32 hook the app installs. The pre-v2.4.0 format
 | Autostart doesn't survive reboot | Check that `%APPDATA%\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\MAC-Converter.lnk` exists. If not, the Settings dialog `set_autostart_enabled(True)` call failed — likely pywin32 issue. |
 | App won't launch (single-instance check) | Look for an orphan `MAC-Converter.exe` process in Task Manager. The mutex is released on process exit; if the process is gone but the mutex isn't, restart Windows. |
 | App launches but immediately exits | Likely a `settings.json` corruption that the rename-and-fallback didn't catch. Move `%APPDATA%\mac-converter-2\settings.json` aside and relaunch — defaults will load. |
+| Update prompt doesn't appear | Either there's no newer release on GitHub, or the network request failed silently. Check stderr for `[update_check]` messages. Verify `update_check_queue` is being drained by `_update_timer` (is the timer running and connected?). |
 
 See [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) for the full user-facing troubleshooting guide.
 

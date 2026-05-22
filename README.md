@@ -2,7 +2,7 @@
 
 A lightweight Windows system tray utility for converting MAC addresses between different formats with a global hotkey, auto-cycling format selection, and clipboard integration.
 
-**Current Version:** 2.4.2
+**Current Version:** 2.5.0
 **Status:** Production-ready ✅
 **License:** MIT
 **Author:** Alejandro Lichtenfeld
@@ -12,12 +12,24 @@ A lightweight Windows system tray utility for converting MAC addresses between d
 **[https://aleled.github.io/mac-converter-2/](https://aleled.github.io/mac-converter-2/)** — one-click installer for Windows. The download portal auto-points at the latest release.
 
 Direct links to the latest version:
-- **[MAC-Converter-Setup-v2.4.2.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.4.2/MAC-Converter-Setup-v2.4.2.exe)** — Windows installer (~54 MB)
-- **[MAC-Converter.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.4.2/MAC-Converter.exe)** — Standalone executable (~51 MB)
+- **[MAC-Converter-Setup-v2.5.0.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.5.0/MAC-Converter-Setup-v2.5.0.exe)** — Windows installer (~54 MB)
+- **[MAC-Converter.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.5.0/MAC-Converter.exe)** — Standalone executable (~51 MB)
 
 ---
 
 ## What's new
+
+### 2.5.0 (2026-05-22) — Startup update check
+
+On launch, the app now makes a quiet call to the GitHub Releases API (about 2 seconds after startup, in a background thread — doesn't block the tray icon). If a newer release exists, a modal dialog shows the current and latest versions with a release-notes excerpt, plus two buttons: **Upgrade** (opens the [download portal](https://aleled.github.io/mac-converter-2/) in your default browser and exits the app so the installer can replace it in place) and **Skip** (dismisses for this session; the next launch re-checks).
+
+If you're offline, behind a captive portal, rate-limited, or already on the latest version, the check fails silently — no popup, no error. Also: `APP_VERSION` is now a single source of truth in `update_check.py` (three previously-hardcoded version strings consolidated).
+
+Also new: **TLS interception in v2.4.3** (re-described here for completeness) — the IEEE OUI download was failing on corporate networks because Python's `urllib` was using its bundled CA list instead of Windows' certificate store. v2.4.3 added the `truststore` package which the new update check inherits — both the OUI download and the GitHub API call use Windows' trust store transparently.
+
+### 2.4.3 (2026-05-15) — Corporate-network TLS interception
+
+OUI database download now works on corporate networks that use TLS-intercepting proxies (Zscaler, Palo Alto, FortiGate, Cisco Umbrella, etc.). Added the `truststore` package so `urllib` uses Windows' certificate store directly — same approach pip uses. New "Import from file…" button in Settings as belt-and-suspenders for locked-down environments where even `truststore` isn't enough.
 
 ### 2.4.2 (2026-05-15) — Enter-to-vendor-lookup actually fixed
 
@@ -503,6 +515,8 @@ Common quick fixes are below. For the **complete** user-facing troubleshooting g
 
 ## Version History
 
+- **2.5.0** (2026-05-22): Startup update check — app fetches the latest release from the GitHub API on launch; if a newer version exists, a modal prompt offers Upgrade (opens the portal in browser, exits app) or Skip. `APP_VERSION` consolidated into a single source of truth in `update_check.py`.
+- **2.4.3** (2026-05-15): Corporate-network TLS interception — added `truststore` so `urllib` uses Windows' cert store; new "Import from file…" Settings button as belt-and-suspenders.
 - **2.4.2** (2026-05-15): Enter-to-vendor-lookup actually fixed (Qt.StrongFocus + AttachThreadInput + Qt.ApplicationShortcut + keyPressEvent fallback)
 - **2.4.1** (2026-05-15): First focus-grab attempt (superseded — see 2.4.2)
 - **2.4.0** (2026-05-14): Bug-fix release — 37 audit findings closed across 5 high-severity (locked-clipboard crash, OUI download race, autostart now actually functional, hotkey validation, removal of system-wide keyboard hook), plus atomic settings/OUI writes, single-instance check, .ico icon, and dependency hygiene.
