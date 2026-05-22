@@ -22,6 +22,7 @@ import threading
 import sys
 from mac_formats import detect_mac, convert_mac
 from oui_lookup import OUIDatabase
+from update_check import APP_VERSION
 import platform
 import os
 from PyQt5.QtWidgets import (QApplication, QDialog, QVBoxLayout, QLabel, QHBoxLayout, QWidget,
@@ -494,7 +495,7 @@ class AboutDialog(QDialog):
         layout.addWidget(app_name)
 
         # Version
-        version_label = QLabel("Version 2.4.3")
+        version_label = QLabel(f"Version {APP_VERSION}")
         version_label.setAlignment(Qt.AlignCenter)
         version_label.setStyleSheet("color: #999999; font-size: 10pt;")
         layout.addWidget(version_label)
@@ -1940,7 +1941,7 @@ DEFAULT_SETTINGS = {
     'notification_duration': 3,          # Notification display seconds
     'author': 'Alejandro Lichtenfeld',   # Correct author name
     'license': 'MIT',
-    'about': 'MAC Address Converter Utility v2.4.3\nAuthor: Alejandro Lichtenfeld\nLicense: MIT\nhttps://github.com/aleled/mac-converter-2',
+    'about': f'MAC Address Converter Utility v{APP_VERSION}\nAuthor: Alejandro Lichtenfeld\nLicense: MIT\nhttps://github.com/aleled/mac-converter-2',
     'oui_enabled': True,                 # Enable OUI vendor lookup
     'oui_auto_update': True,             # Auto-download OUI database when stale
     'oui_update_interval_days': 7,       # Days before OUI database is considered stale

@@ -34,6 +34,9 @@ try:
 except ImportError:
     pass
 
+# v2.5.0 — read the app version from the single source of truth.
+from update_check import APP_VERSION
+
 OUI_URL = "https://standards-oui.ieee.org/oui/oui.csv"
 OUI_FILENAME = "oui.csv"
 
@@ -87,7 +90,7 @@ class OUIDatabase:
                 progress_callback("Connecting to IEEE...")
 
             req = urllib.request.Request(OUI_URL, headers={
-                'User-Agent': 'MAC-Converter/2.4.3'
+                'User-Agent': f'MAC-Converter/{APP_VERSION}'
             })
 
             with urllib.request.urlopen(req, timeout=30) as response:
