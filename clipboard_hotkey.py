@@ -22,6 +22,7 @@ import threading
 import sys
 from mac_formats import detect_mac, convert_mac
 from oui_lookup import OUIDatabase
+import update_check
 from update_check import APP_VERSION
 import platform
 import os
@@ -187,6 +188,10 @@ def on_quit(icon, item):
     """
     global listener
     icon.stop()
+    # v2.5.0: stop the update-check timer explicitly (standalone QTimer
+    # instances aren't reliably caught by the widget-walk below).
+    if _update_timer is not None:
+        _update_timer.stop()
     # F29: give the pynput listener a chance to terminate cleanly
     if listener is not None:
         try:
@@ -246,6 +251,12 @@ oui_download_progress_queue = queue.Queue()
 # is running so a second Update click can be rejected, and so on_quit can
 # briefly wait for the worker to finish os.replace before process death.
 _oui_download_in_progress = threading.Event()
+
+# v2.5.0 — startup update check. Worker thread posts a result dict here;
+# Qt main thread polls via _update_timer and shows the modal prompt.
+update_check_queue = queue.Queue()
+_update_prompt_shown_this_session = False
+_update_timer = None  # populated by main(); stopped in on_quit
 
 # --- Format popup display function ---
 def show_format_popup(app, formats, current_index, duration_seconds, mac_normalized=None):
@@ -1843,6 +1854,44 @@ def show_vendor_popup(vendor_name, mac_normalized, duration_seconds):
     current_vendor_popup.show()
 
 
+# --- v2.5.0: startup update check ---
+
+def _start_update_check():
+    """Spawn a daemon thread that calls update_check.check_for_update().
+
+    On a positive result (a newer release exists), the result dict is
+    placed onto update_check_queue. _poll_update_check (called by the
+    QTimer on the Qt main thread) picks it up and shows the prompt.
+
+    All failure paths inside check_for_update return None silently —
+    nothing is queued on failure, no popup is shown.
+    """
+    def worker():
+        result = update_check.check_for_update()
+        if result is not None:
+            update_check_queue.put(result)
+    threading.Thread(target=worker, daemon=True).start()
+
+
+def _poll_update_check():
+    """Drain update_check_queue. Shows the upgrade prompt at most once per session."""
+    global _update_prompt_shown_this_session
+    try:
+        info = update_check_queue.get_nowait()
+    except queue.Empty:
+        return
+    if _update_prompt_shown_this_session:
+        return
+    _update_prompt_shown_this_session = True
+    show_update_prompt(info)
+
+
+def show_update_prompt(info):
+    """Stub — real implementation lands in Task 4."""
+    print(f"[update_check] (stub) update available: {info.get('latest')}",
+          file=sys.stderr)
+
+
 # --- Tray Menu ---
 def tray_app():
     """
@@ -2114,6 +2163,16 @@ def main():
             oui_thread.start()
 
         QTimer.singleShot(0, _start_oui_init)
+
+    # v2.5.0: schedule update check 2 seconds after startup so the tray
+    # icon is fully alive before any prompt. Worker runs in a daemon
+    # thread; results are picked up by _update_timer below.
+    QTimer.singleShot(2000, _start_update_check)
+
+    global _update_timer
+    _update_timer = QTimer()
+    _update_timer.timeout.connect(_poll_update_check)
+    _update_timer.start(1000)  # 1 Hz poll of update_check_queue
 
     # Add QTimer for About dialog
     def poll_about_dialog():
