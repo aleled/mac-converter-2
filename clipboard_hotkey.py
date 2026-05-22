@@ -1887,9 +1887,50 @@ def _poll_update_check():
 
 
 def show_update_prompt(info):
-    """Stub — real implementation lands in Task 4."""
-    print(f"[update_check] (stub) update available: {info.get('latest')}",
-          file=sys.stderr)
+    """Show a modal QMessageBox with Upgrade / Skip buttons.
+
+    Called by _poll_update_check on the Qt main thread when
+    update_check.check_for_update() reports a newer release available.
+
+    Upgrade: opens info['portal_url'] in the user's default browser via
+    QDesktopServices, then calls on_quit so the running app exits and
+    the installer can replace the exe.
+
+    Skip: closes the dialog. No persistent state — relaunching prompts
+    again until the user upgrades.
+    """
+    from PyQt5.QtWidgets import QMessageBox
+    from PyQt5.QtCore import QUrl
+    from PyQt5.QtGui import QDesktopServices
+
+    msg = QMessageBox()
+    msg.setWindowTitle("MAC Converter — Update Available")
+    try:
+        msg.setWindowIcon(QIcon(get_icon_path()))
+    except Exception:
+        pass
+    msg.setIcon(QMessageBox.Information)
+    msg.setText(
+        f"A newer version of MAC Converter is available.\n\n"
+        f"Current: v{info['current']}\n"
+        f"Latest: v{info['latest']}"
+    )
+    if info.get("notes_excerpt"):
+        msg.setDetailedText(info["notes_excerpt"])
+
+    upgrade_btn = msg.addButton("Upgrade", QMessageBox.AcceptRole)
+    skip_btn = msg.addButton("Skip", QMessageBox.RejectRole)
+    msg.setDefaultButton(upgrade_btn)
+    msg.exec_()
+
+    if msg.clickedButton() is upgrade_btn:
+        # Open the download portal in the user's default browser. The
+        # browser uses Windows' cert store and handles corporate TLS
+        # interception naturally — same reason the in-app OUI download
+        # needs truststore but the browser doesn't.
+        QDesktopServices.openUrl(QUrl(info["portal_url"]))
+        # Exit the app so the installer can replace the running exe.
+        on_quit(tray_icon, None)
 
 
 # --- Tray Menu ---
