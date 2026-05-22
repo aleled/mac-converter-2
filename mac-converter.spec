@@ -15,6 +15,7 @@ a = Analysis(
         'win32event',
         'win32api',
         'winerror',
+        'truststore',
     ],
     hookspath=[],
     hooksconfig={},

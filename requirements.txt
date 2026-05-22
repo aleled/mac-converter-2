@@ -7,6 +7,10 @@ pyperclip
 pynput
 PyQt5
 pywin32
+# truststore makes urllib use Windows' certificate store so corporate
+# TLS-intercepting proxies (Zscaler, Palo Alto, FortiGate, etc.) don't
+# break the IEEE OUI download. Same approach pip uses.
+truststore
 
 # Build-time only (not needed for `python clipboard_hotkey.py`):
 PyInstaller

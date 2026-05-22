@@ -5,6 +5,13 @@
 
 # Changelog
 
+## [2.4.3] - 2026-05-15
+### Fixed
+- **OUI database download works in corporate networks now.** Many corporate environments use TLS-intercepting proxies (Zscaler, Palo Alto, FortiGate, Cisco Umbrella, etc.) that re-sign HTTPS with a self-signed CA root. Windows trusts that CA (because the corporate IT department installed it), but Python's `urllib` was using its bundled CA list instead and failing with `CERTIFICATE_VERIFY_FAILED`. Added the `truststore` package and `truststore.inject_into_ssl()` at module load — `urllib` now uses Windows' certificate store, the same way every browser does. Same approach pip itself uses internally.
+
+### Added
+- **"Import from file…" button** in Settings → OUI Vendor Lookup. Pick a `oui.csv` you downloaded yourself (e.g., via a browser if the in-app download still fails); the app validates it, atomically replaces the live database, and reloads. Belt-and-suspenders fallback for environments where `truststore` isn't enough.
+
 ## [2.4.2] - 2026-05-15
 ### Fixed
 - **Enter-to-vendor-lookup actually works now.** v2.4.1's first attempt at fixing the post-F19 focus regression set the popup focus and called `SetForegroundWindow`, but `SetForegroundWindow` was rejected by Windows because the converter process didn't "receive the last input event" (pynput's hook is passive). Also, `QDialog`'s default focus policy is `Qt.NoFocus`, so even when `setFocus()` was called nothing was actually focusable. Three changes land the fix:

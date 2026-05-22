@@ -494,7 +494,7 @@ class AboutDialog(QDialog):
         layout.addWidget(app_name)
 
         # Version
-        version_label = QLabel("Version 2.4.2")
+        version_label = QLabel("Version 2.4.3")
         version_label.setAlignment(Qt.AlignCenter)
         version_label.setStyleSheet("color: #999999; font-size: 10pt;")
         layout.addWidget(version_label)
@@ -1216,6 +1216,18 @@ class SettingsDialog(QDialog):
             view_btn.setToolTip("Database not loaded")
         oui_btn_layout.addWidget(view_btn)
 
+        # v2.4.3: manual file import as a fallback for corporate networks
+        # where even truststore's Windows-cert-store integration isn't
+        # enough (very locked-down environments). User can download the
+        # CSV via a browser and point this at the file.
+        import_btn = QPushButton("Import from file…")
+        import_btn.clicked.connect(self.import_oui_from_file)
+        import_btn.setToolTip(
+            "Load an OUI database CSV downloaded manually (e.g. via a browser "
+            "if the in-app download fails behind a corporate TLS proxy)."
+        )
+        oui_btn_layout.addWidget(import_btn)
+
         oui_btn_layout.addStretch()
         oui_layout.addLayout(oui_btn_layout)
 
@@ -1285,6 +1297,98 @@ class SettingsDialog(QDialog):
         """Open the OUI database viewer dialog."""
         dlg = OUIViewerDialog(self)
         dlg.exec_()
+
+    def import_oui_from_file(self):
+        """Import an OUI database CSV from a user-selected file.
+
+        Fallback for corporate networks where the IEEE download fails due
+        to TLS interception. User downloads oui.csv via a browser (which
+        uses Windows' cert store and handles the corporate CA fine), then
+        points this at the file. We validate by attempting a parse, then
+        atomically replace the live database and reload.
+        """
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox
+
+        src, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select OUI database CSV",
+            os.path.expanduser("~/Downloads"),
+            "CSV files (*.csv);;All files (*)",
+        )
+        if not src:
+            return  # user cancelled
+
+        # Sanity-check size — a real IEEE CSV is several MB; reject obvious garbage
+        try:
+            size_bytes = os.path.getsize(src)
+        except OSError as e:
+            QMessageBox.warning(self, "MAC Converter", f"Could not read selected file:\n{e}")
+            return
+        if size_bytes < 1000:
+            QMessageBox.warning(
+                self, "MAC Converter",
+                f"File is only {size_bytes} bytes — too small to be a valid OUI database.",
+            )
+            return
+
+        # Validate by parsing into a temporary OUIDatabase rooted at the source dir
+        # (we don't move the file yet — only after we know it parses cleanly).
+        import shutil
+        try:
+            with open(src, "r", encoding="utf-8", errors="replace") as f:
+                head = f.read(2048)
+            head_lower = head.lstrip().lower()
+            if head_lower.startswith("<!doctype") or head_lower.startswith("<html") or head_lower.startswith("<?xml"):
+                QMessageBox.warning(
+                    self, "MAC Converter",
+                    "Selected file looks like HTML/XML, not a CSV. "
+                    "If you downloaded it through a corporate proxy that returned an "
+                    "error page, please retry the download in a browser.",
+                )
+                return
+        except OSError as e:
+            QMessageBox.warning(self, "MAC Converter", f"Could not read selected file:\n{e}")
+            return
+
+        # Copy into place atomically: src -> %APPDATA%\mac-converter-2\oui.csv.tmp -> oui.csv
+        if oui_db is None:
+            QMessageBox.warning(self, "MAC Converter", "OUI database object not initialized.")
+            return
+        try:
+            os.makedirs(oui_db.data_dir, exist_ok=True)
+            tmp_path = oui_db.oui_path + ".tmp"
+            shutil.copyfile(src, tmp_path)
+            os.replace(tmp_path, oui_db.oui_path)
+        except OSError as e:
+            QMessageBox.warning(
+                self, "MAC Converter",
+                f"Could not write OUI database:\n{e}",
+            )
+            return
+
+        # Reload the in-memory database
+        ok, result = oui_db.load()
+        if not ok:
+            QMessageBox.warning(
+                self, "MAC Converter",
+                f"Imported file but failed to parse:\n{result}\n\n"
+                "The file may not be in the expected IEEE OUI CSV format "
+                "(columns: Registry, Assignment, Organization Name, Organization Address).",
+            )
+            return
+
+        # Record the import timestamp like a successful download
+        import datetime
+        settings['oui_last_downloaded'] = datetime.datetime.now().isoformat()
+        try:
+            save_settings(settings)
+        except OSError:
+            pass
+
+        QMessageBox.information(
+            self, "MAC Converter",
+            f"OUI database imported successfully.\n{result} entries loaded.",
+        )
 
 def show_settings_dialog():
     """Show settings dialog in main Qt thread."""
@@ -1836,7 +1940,7 @@ DEFAULT_SETTINGS = {
     'notification_duration': 3,          # Notification display seconds
     'author': 'Alejandro Lichtenfeld',   # Correct author name
     'license': 'MIT',
-    'about': 'MAC Address Converter Utility v2.4.2\nAuthor: Alejandro Lichtenfeld\nLicense: MIT\nhttps://github.com/aleled/mac-converter-2',
+    'about': 'MAC Address Converter Utility v2.4.3\nAuthor: Alejandro Lichtenfeld\nLicense: MIT\nhttps://github.com/aleled/mac-converter-2',
     'oui_enabled': True,                 # Enable OUI vendor lookup
     'oui_auto_update': True,             # Auto-download OUI database when stale
     'oui_update_interval_days': 7,       # Days before OUI database is considered stale

@@ -15,6 +15,25 @@ import urllib.request
 import urllib.error
 import threading
 
+# v2.4.3 — make TLS verification use Windows' certificate store instead of
+# Python's bundled CA list. Critical for corporate networks where TLS-
+# intercepting proxies (Zscaler, Palo Alto, FortiGate, Cisco Umbrella,
+# etc.) re-sign HTTPS with a self-signed CA root that Windows trusts but
+# Python's bundled CA list does not. Without this, the IEEE OUI download
+# fails with CERTIFICATE_VERIFY_FAILED on every corporate machine.
+#
+# truststore is the same approach pip uses internally. inject_into_ssl()
+# is a global monkey-patch: subsequent ssl.create_default_context() calls
+# return contexts backed by the OS trust store.
+#
+# Gracefully degrades if truststore isn't installed — the app still works
+# on networks without TLS interception.
+try:
+    import truststore as _truststore
+    _truststore.inject_into_ssl()
+except ImportError:
+    pass
+
 OUI_URL = "https://standards-oui.ieee.org/oui/oui.csv"
 OUI_FILENAME = "oui.csv"
 
@@ -68,7 +87,7 @@ class OUIDatabase:
                 progress_callback("Connecting to IEEE...")
 
             req = urllib.request.Request(OUI_URL, headers={
-                'User-Agent': 'MAC-Converter/2.4.2'
+                'User-Agent': 'MAC-Converter/2.4.3'
             })
 
             with urllib.request.urlopen(req, timeout=30) as response:
