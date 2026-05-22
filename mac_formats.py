@@ -24,7 +24,19 @@ MAC_FORMATS = [
 ]
 
 # Regex to match MAC addresses in various formats (strict, must be delimited or at string boundaries)
-MAC_REGEX = re.compile(r"(?<![0-9A-Fa-f])((?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}|[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}-[0-9A-Fa-f]{6}|[0-9A-Fa-f]{12})(?![0-9A-Fa-f])")
+MAC_REGEX = re.compile(
+    r"(?<![0-9A-Fa-f])("
+    r"(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}"   # colon-separated
+    r"|"
+    r"(?:[0-9A-Fa-f]{2}-){5}[0-9A-Fa-f]{2}"   # hyphen-separated
+    r"|"
+    r"[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}"  # dot-separated
+    r"|"
+    r"[0-9A-Fa-f]{6}-[0-9A-Fa-f]{6}"          # Hyphen-6char (Cisco)
+    r"|"
+    r"[0-9A-Fa-f]{12}"                         # plain 12-hex
+    r")(?![0-9A-Fa-f])"
+)
 
 def normalize_mac(mac: str) -> str:
     """Remove all separators and return 12 hex digits (no case change)."""

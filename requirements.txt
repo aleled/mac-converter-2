@@ -1,12 +1,16 @@
-# NOTE: For future development, always update this file whenever new libraries are added, removed, or replaced. Ensure all dependencies are listed and up to date for legal and functional compliance.
+# NOTE: For future development, always update this file whenever new libraries are added, removed, or replaced.
 
 # Python requirements for MAC Address Converter
 pystray
 Pillow
-keyboard
 pyperclip
-PyInstaller
 pynput
 PyQt5
-PyQt5
 pywin32
+# truststore makes urllib use Windows' certificate store so corporate
+# TLS-intercepting proxies (Zscaler, Palo Alto, FortiGate, etc.) don't
+# break the IEEE OUI download. Same approach pip uses.
+truststore
+
+# Build-time only (not needed for `python clipboard_hotkey.py`):
+PyInstaller

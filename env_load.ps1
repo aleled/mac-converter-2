@@ -6,5 +6,7 @@ if (Test-Path $venvPath) {
     . $venvPath
     Write-Host '[INFO] Virtual environment activated.'
 } else {
-    Write-Host '[ERROR] No virtual environment found. Run `u001b[33mpython -m venv venv`u001b[0m first.'
+    Write-Host "[ERROR] No virtual environment found. Run " -NoNewline
+    Write-Host "python -m venv venv" -ForegroundColor Yellow -NoNewline
+    Write-Host " first."
 }
