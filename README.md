@@ -2,7 +2,7 @@
 
 A lightweight Windows system tray utility for converting MAC addresses between different formats with a global hotkey, auto-cycling format selection, and clipboard integration.
 
-**Current Version:** 2.5.0
+**Current Version:** 2.5.1
 **Status:** Production-ready ✅
 **License:** MIT
 **Author:** Alejandro Lichtenfeld
@@ -12,12 +12,20 @@ A lightweight Windows system tray utility for converting MAC addresses between d
 **[https://aleled.github.io/mac-converter-2/](https://aleled.github.io/mac-converter-2/)** — one-click installer for Windows. The download portal auto-points at the latest release.
 
 Direct links to the latest version:
-- **[MAC-Converter-Setup-v2.5.0.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.5.0/MAC-Converter-Setup-v2.5.0.exe)** — Windows installer (~54 MB)
-- **[MAC-Converter.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.5.0/MAC-Converter.exe)** — Standalone executable (~51 MB)
+- **[MAC-Converter-Setup-v2.5.1.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.5.1/MAC-Converter-Setup-v2.5.1.exe)** — Windows installer (~54 MB)
+- **[MAC-Converter.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.5.1/MAC-Converter.exe)** — Standalone executable (~51 MB)
 
 ---
 
 ## What's new
+
+### 2.5.1 (2026-05-22) — Format expansion + autostart double-launch fix
+
+Two new formats and a real upgrade-path bug fix.
+
+- **Space-separated detection** (`aa bb cc dd ee ff`) — recognized as input; not added to the conversion cycle (the app never *outputs* this format).
+- **New 4-4-4 dash format** (`AABB-CCDD-EEFF`) — detected as input *and* added as two new conversion outputs (uppercase + lowercase). Conversion cycle expanded from 10 to 12 formats.
+- **Fixed double-launch at Windows startup.** Users who upgraded from pre-v2.4.0 had two startup shortcuts (one from the old installer named `MAC Address Converter.lnk`, one from v2.4.0+'s in-app autostart named `MAC-Converter.lnk` — same target, different filenames). Both fired at boot, hitting the single-instance mutex. v2.5.1 cleans up the legacy shortcut both at install time (via Inno Setup `[InstallDelete]`) and on every app launch (via a runtime sweep).
 
 ### 2.5.0 (2026-05-22) — Startup update check
 
@@ -170,18 +178,24 @@ UI behavior is verified manually before each release — PyQt5 widget tests woul
 
 ## Supported MAC Address Formats
 
-The app cycles through 10 formats:
+The app cycles through **12 conversion formats**:
 
 1. Colon-separated uppercase: `AA:BB:CC:DD:EE:FF`
 2. Colon-separated lowercase: `aa:bb:cc:dd:ee:ff`
 3. Hyphen-separated uppercase: `AA-BB-CC-DD-EE-FF`
 4. Hyphen-separated lowercase: `aa-bb-cc-dd-ee-ff`
-5. Dot-separated uppercase: `AABB.CCDD.EEFF`
-6. Dot-separated lowercase: `aabb.ccdd.eeff`
-7. Plain uppercase: `AABBCCDDEEFF`
-8. Plain lowercase: `aabbccddeeff`
-9. Hyphen-6char uppercase (Cisco-style): `AABBCC-DDEEFF`
-10. Hyphen-6char lowercase (Cisco-style): `aabbcc-ddeeff`
+5. Hyphen-6char uppercase (Cisco-style): `AABBCC-DDEEFF`
+6. Hyphen-6char lowercase (Cisco-style): `aabbcc-ddeeff`
+7. Dot-separated uppercase: `AABB.CCDD.EEFF`
+8. Dot-separated lowercase: `aabb.ccdd.eeff`
+9. **Dash-4char uppercase** (`AABB-CCDD-EEFF`) — new in v2.5.1
+10. **Dash-4char lowercase** (`aabb-ccdd-eeff`) — new in v2.5.1
+11. Plain uppercase: `AABBCCDDEEFF`
+12. Plain lowercase: `aabbccddeeff`
+
+### Also accepted on input (detection only — not in the conversion cycle)
+
+- **Space-separated** (`aa bb cc dd ee ff`) — detected as a valid MAC, but the app never *outputs* this format. Useful for pasting MACs from Wireshark, command-line tools, or logs that use spaces as separators. New in v2.5.1.
 
 ---
 
@@ -189,7 +203,7 @@ The app cycles through 10 formats:
 
 ### Option 1: Windows Installer (Recommended)
 
-1. Go to **[https://aleled.github.io/mac-converter-2/](https://aleled.github.io/mac-converter-2/)** and click **Download for Windows**, OR grab `MAC-Converter-Setup-v2.4.0.exe` directly from the [Releases page](https://github.com/aleled/mac-converter-2/releases/latest)
+1. Go to **[https://aleled.github.io/mac-converter-2/](https://aleled.github.io/mac-converter-2/)** and click **Download for Windows**, OR grab `MAC-Converter-Setup-v2.5.1.exe` directly from the [Releases page](https://github.com/aleled/mac-converter-2/releases/latest)
 2. Run the installer and follow the wizard
 3. Choose optional features:
    - Desktop shortcut
@@ -515,6 +529,7 @@ Common quick fixes are below. For the **complete** user-facing troubleshooting g
 
 ## Version History
 
+- **2.5.1** (2026-05-22): Format expansion (12 formats now; new 4-4-4 dash variant; space-separated detection) + fixed double-launch at Windows startup caused by legacy installer shortcut.
 - **2.5.0** (2026-05-22): Startup update check — app fetches the latest release from the GitHub API on launch; if a newer version exists, a modal prompt offers Upgrade (opens the portal in browser, exits app) or Skip. `APP_VERSION` consolidated into a single source of truth in `update_check.py`.
 - **2.4.3** (2026-05-15): Corporate-network TLS interception — added `truststore` so `urllib` uses Windows' cert store; new "Import from file…" Settings button as belt-and-suspenders.
 - **2.4.2** (2026-05-15): Enter-to-vendor-lookup actually fixed (Qt.StrongFocus + AttachThreadInput + Qt.ApplicationShortcut + keyPressEvent fallback)

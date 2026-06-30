@@ -1,6 +1,6 @@
 # TODO / Feature Tracker
 
-**Current Version:** 2.5.0 (Production Ready)
+**Current Version:** 2.5.1 (Production Ready)
 **Last Updated:** 2026-05-22
 
 ---
@@ -145,9 +145,20 @@
 - [x] Module-level `_update_timer` cleaned up in `on_quit` (matches F27 pattern)
 - [x] CHANGELOG `[2.5.0]` section, README, ARCHITECTURE, TROUBLESHOOTING, DEVELOPMENT_LOG updates
 
+### ✅ Milestone 17: Format expansion + autostart double-launch fix (v2.5.1)
+- [x] New space-separated MAC detection (`aa bb cc dd ee ff`) — input only, not in conversion cycle
+- [x] New 4-4-4 dash format (`AABB-CCDD-EEFF` and lowercase) — detection + 2 new conversion outputs; cycle expanded from 10 to 12 formats
+- [x] Format cycle modulo wraps via `len(MAC_FORMATS)` instead of hardcoded `% 10`
+- [x] `last_format_index` validation range expanded from `[0, 9]` to `[0, 11]`
+- [x] Fix double-launch on Windows startup — pre-v2.4.0 installer left `MAC Address Converter.lnk` (full app name); v2.4.0+ in-app autostart used `MAC-Converter.lnk` (different filename, same target); both fired at boot
+- [x] Runtime sweep: `_cleanup_legacy_autostart_shortcuts()` runs at `main()` startup and from `set_autostart_enabled(True)`; idempotent
+- [x] Installer sweep: `[InstallDelete]` directive in `installer.iss` removes `MAC Address Converter.lnk` during install
+- [x] 5 new pytest tests (4 parametrize cases for the new detection inputs and 12-format output, 1 for the expanded `last_format_index` range, 3 for the autostart cleanup helper)
+- [x] CHANGELOG `[2.5.1]` section, README format table updated to 12 formats, ARCHITECTURE §6.7 expanded with the legacy-shortcut narrative, TROUBLESHOOTING entry, DEVELOPMENT_LOG entry
+
 ---
 
-## Current Release (v2.5.0)
+## Current Release (v2.5.1)
 
 **Status:** Production Ready ✅
 
@@ -172,7 +183,7 @@
 
 ### Build Artifacts
 - Standalone executable: `dist/MAC-Converter.exe` (~51 MB, real `.ico` icon embedded)
-- Windows installer: `installer-output/MAC-Converter-Setup-v2.5.0.exe` (~54 MB, single-source-of-truth autostart, startup update check)
+- Windows installer: `installer-output/MAC-Converter-Setup-v2.5.1.exe` (~54 MB, 12 conversion formats, legacy-shortcut cleanup, startup update check)
 - Source code: clean, audited, tested, fully documented (ARCHITECTURE.md, TROUBLESHOOTING.md, BUILDING.md, etc.)
 
 ---

@@ -19,7 +19,7 @@ import sys
 import urllib.error
 import urllib.request
 
-APP_VERSION = "2.5.0"
+APP_VERSION = "2.5.1"
 
 # The owner/repo path for the GitHub Releases API call. Centralised so
 # tests can monkeypatch it if needed in the future, and so any rename

@@ -457,3 +457,51 @@ User requested an update-check-on-startup feature. Five-task implementation foll
 - Commits: `bc6e09a` (module + tests), `a6b343c` (version consolidation), `77aea78` (Qt integration), `dc73301` (QMessageBox UI). Doc-pass commit + version bump + release follow.
 - Releases: v2.4.3, v2.5.0
 - All 34 pytest tests green throughout
+
+---
+
+## 2026-05-22 (later same day) — v2.5.1: format expansion + autostart double-launch fix
+
+User reported the app launches twice at Windows startup, with the second instance showing "MAC Converter is already running". They also asked for two new format-detection capabilities and (separately) the update-check feature, which had already shipped in v2.5.0.
+
+### The double-launch bug — diagnosis matched reality
+
+User's theory was "the installer injects a second launch." Closer to right than expected, but the actual cause was a filename mismatch between two app generations:
+
+- The **pre-v2.4.0 installer** created a Startup-folder shortcut named **`MAC Address Converter.lnk`** via its `[Tasks] startup` / `[Icons] {userstartup}\...` sections, using Inno Setup's `{#MyAppName}` (full app name with spaces).
+- The **v2.4.0+ in-app autostart** (`set_autostart_enabled`) writes **`MAC-Converter.lnk`** — different filename. Set as the canonical to remove the installer's involvement (F31), but the rename created an upgrade hazard.
+- Users who upgraded ended up with BOTH shortcuts in their Startup folder, both pointing at the new exe. Both fired at boot; the second instance hit the single-instance mutex (v2.4.0's F25 fix) and showed the "already running" dialog.
+
+The fix is two-layered:
+
+1. **Runtime sweep** — new `_cleanup_legacy_autostart_shortcuts()` walks `_LEGACY_AUTOSTART_LNK_FILENAMES` and deletes any matches from the Startup folder. Called from `main()` at startup and from `set_autostart_enabled(True)` before creating the new shortcut. Idempotent, silent, best-effort. The smoke test on the user's actual Windows machine confirmed it removed a real `MAC Address Converter.lnk` on first run.
+2. **Install-time sweep** — new `[InstallDelete]` section in `installer.iss` removes the same legacy filename during install, closing the bug immediately on first install/upgrade.
+
+### Format additions
+
+- **Space-separated detection** (`aa bb cc dd ee ff`) — added as a regex alternative; NOT added to `MAC_FORMATS`. The app accepts it as input but never generates it as output, per the user's explicit "no need to convert to this format" instruction.
+- **4-4-4 with dashes** (`AABB-CCDD-EEFF`) — both a regex alternative AND two new entries in `MAC_FORMATS` (Dash-4char uppercase + lowercase). Cycle grew from 10 to 12 formats.
+
+Format-cycle modulo changed from hardcoded `% 10` to `% len(formats)` so future additions can't desync. `_validate_settings` range for `last_format_index` bumped from `[0, 9]` to `[0, 11]`.
+
+### Update check
+
+Already shipped in v2.5.0 — no work needed. The user's request was a reminder, not a missing feature. Documented in the v2.5.0 session entry above.
+
+### Commits this session
+
+1. `<sha1>` — `feat: detect space-separated MACs + add 4-4-4 dash conversion outputs`
+2. `<sha2>` — `fix: clean up legacy 'MAC Address Converter.lnk' to stop double-launch at boot`
+3. `<sha3>` — `release: bump version to 2.5.1 + doc sweep + installer [InstallDelete]`
+
+(SHAs filled in below as commits land — this entry is written in advance of the actual commits.)
+
+### Test status
+
+42/42 pytest tests green (34 prior + 4 new mac_formats parametrize cases + 1 settings range test + 3 autostart cleanup tests).
+
+### Lessons noted
+
+- **Filename renames during an autostart implementation switch require legacy cleanup.** The F31 fix in v2.4.0 changed the autostart filename from `MAC Address Converter.lnk` to `MAC-Converter.lnk` without a migration step for the old filename. Should have been caught at the time. Future canonical-filename changes need an `[InstallDelete]` + runtime sweep on day one — this is now the documented pattern (ARCHITECTURE.md § 6.7).
+- **A user's vague bug report theory ("it installs a second launch") was close enough to be useful.** Took the symptom seriously and traced backwards to find the actual filename mismatch. The user-supplied theory rules out alternative causes (a stray `Run` registry entry, a misbehaving Inno Setup script) faster than starting from zero.
+- **Smoke-testing helpers on the dev machine catches real-world state.** Calling `_cleanup_legacy_autostart_shortcuts()` once during T2 development surfaced an actual legacy shortcut on the user's machine — confirming the diagnosis before shipping.

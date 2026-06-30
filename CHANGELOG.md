@@ -5,6 +5,21 @@
 
 # Changelog
 
+## [2.5.1] - 2026-05-22
+### Added
+- **Detect space-separated MAC addresses.** Input like `aa bb cc dd ee ff` is now recognized as a valid MAC. Not added to the conversion cycle — the app never generates this format as output, just accepts it as input.
+- **New 4-4-4 dash format** (`AABB-CCDD-EEFF` / `aabb-ccdd-eeff`). Added as both a detection pattern and two new conversion outputs (uppercase + lowercase). Sits alongside the existing dot-separated 4-4-4 (`AABB.CCDD.EEFF`) and the Cisco hyphen-6 (`AABBCC-DDEEFF`). Cycle expanded from 10 to 12 formats.
+- 3 new pytest tests for `_cleanup_legacy_autostart_shortcuts` (deletes legacy, preserves canonical and unrelated files, idempotent).
+
+### Fixed
+- **Double-launch on Windows startup.** Users who upgraded from a pre-v2.4.0 install saw the app launch twice at boot — the second instance immediately showed "MAC Converter is already running". Root cause: the pre-v2.4.0 installer created a Startup-folder shortcut named `MAC Address Converter.lnk` via its `[Tasks] startup` entry. v2.4.0+ switched to in-app autostart but uses the filename `MAC-Converter.lnk` — a different file pointing at the same exe. Both fired at boot.
+  - **Runtime cleanup:** the app now sweeps known legacy autostart filenames from the user's Startup folder on every launch. Idempotent and silent.
+  - **Installer cleanup:** new `[InstallDelete]` directive in `installer.iss` removes `MAC Address Converter.lnk` during install — closes the bug immediately for everyone who runs the v2.5.1 installer.
+
+### Changed
+- Format cycle wraps via `len(MAC_FORMATS)` instead of a hardcoded `% 10`, so future format additions can't desync.
+- `last_format_index` validation range expanded from `[0, 9]` to `[0, 11]` to match the new 12-format cycle.
+
 ## [2.5.0] - 2026-05-22
 ### Added
 - **Startup update check.** On launch, the app fetches the latest release tag from the GitHub Releases API (about 2 seconds after the tray icon is up, in a background daemon thread). If a newer version exists, a modal prompt appears with Upgrade and Skip buttons. Upgrade opens the GitHub Pages download portal in the user's default browser and exits the app so the installer can replace the running exe. Skip dismisses for the current session; the next launch re-checks.

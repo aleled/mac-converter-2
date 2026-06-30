@@ -2,7 +2,7 @@
 ; Created: December 15, 2025
 
 #define MyAppName "MAC Address Converter"
-#define MyAppVersion "2.5.0"
+#define MyAppVersion "2.5.1"
 #define MyAppPublisher "Alejandro Lichtenfeld"
 #define MyAppURL "https://github.com/aleled/mac-converter-2"
 #define MyAppExeName "MAC-Converter.exe"
@@ -42,6 +42,16 @@ Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "icon-v1.png"; DestDir: "{app}"; Flags: ignoreversion
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
+
+[InstallDelete]
+; v2.5.1: remove the pre-v2.4.0 Startup-folder shortcut. That installer
+; created "MAC Address Converter.lnk" via its [Tasks]/[Icons] sections,
+; and the v2.4.0+ in-app autostart writes a DIFFERENT filename
+; ("MAC-Converter.lnk"), so users who upgraded ended up with both
+; shortcuts firing at boot — double-launched. The app also sweeps these
+; at runtime, but doing it during install closes the bug immediately for
+; users who run the installer.
+Type: files; Name: "{userstartup}\MAC Address Converter.lnk"
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

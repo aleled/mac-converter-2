@@ -234,6 +234,22 @@ When running the installed exe, there's no easy way to capture stderr (the exe i
 
 ---
 
+## The app launches twice at Windows startup ("already running" dialog)
+
+**Fixed in v2.5.1.** This happened to users who upgraded from a pre-v2.4.0 install: the old installer had created a Startup-folder shortcut named `MAC Address Converter.lnk` (full app name, with spaces), while v2.4.0+'s in-app autostart writes a different filename `MAC-Converter.lnk`. Both pointed at the same exe, so both fired at boot. The second instance hit the single-instance mutex and showed "MAC Converter is already running".
+
+**Fix path:**
+
+1. Install [v2.5.1](https://github.com/aleled/mac-converter-2/releases/latest) or later. The installer's `[InstallDelete]` directive removes the legacy shortcut at install time. Even if you don't run the installer, the v2.5.1+ app sweeps the legacy filename on every launch.
+2. After reboot, only one instance should launch.
+
+**Manual cleanup** (if you want to verify or fix without upgrading):
+
+1. Press `Win+R`, paste `shell:startup`, press Enter — opens your Startup folder.
+2. If you see **both** `MAC Address Converter.lnk` AND `MAC-Converter.lnk`, delete the one with spaces in the name (`MAC Address Converter.lnk`). The dash version is the canonical v2.4.0+ shortcut and should stay.
+
+---
+
 ## My issue isn't here
 
 1. Open the [GitHub Issues page](https://github.com/aleled/mac-converter-2/issues) and check for similar reports.

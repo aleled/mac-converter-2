@@ -13,10 +13,10 @@
     <header>
         <img class="app-icon" src="icon-v1.png" alt="MAC Address Converter">
         <h1>MAC Address Converter</h1>
-        <p class="version-badge" data-version>v2.5.0</p>
+        <p class="version-badge" data-version>v2.5.1</p>
         <p class="tagline">
             Lightweight Windows tray utility for converting MAC addresses between
-            10 formats &mdash; with a global hotkey, auto-cycling, and IEEE OUI
+            12 formats &mdash; with a global hotkey, auto-cycling, and IEEE OUI
             vendor lookup. No admin rights required.
         </p>
     </header>
@@ -31,7 +31,7 @@
     <section class="features">
         <h2>What it does</h2>
         <ul>
-            <li>Cycles through 10 MAC address formats with one keystroke (default <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>)</li>
+            <li>Cycles through 12 MAC address formats with one keystroke (default <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>) &mdash; including space-separated detection</li>
             <li>OUI vendor lookup against the IEEE database (~38,900 vendors) &mdash; press <kbd>Enter</kbd> in the popup</li>
             <li>Runs from the system tray &mdash; no admin rights required</li>
             <li>Dark-themed Settings and About dialogs with persistent preferences</li>
@@ -45,11 +45,18 @@
     </section>
 
     <section class="features">
-        <h2>What's new in v2.5.0</h2>
+        <h2>What's new in v2.5.1</h2>
         <ul>
-            <li><strong>Startup update check</strong> &mdash; the app fetches the latest release from the GitHub API on launch and prompts you with Upgrade / Skip buttons when a newer version is available. Silent on offline, rate-limited, or already-latest.</li>
-            <li><strong>Single source of truth for the version string</strong> &mdash; <code>APP_VERSION</code> in <code>update_check.py</code> replaces three previously-hardcoded sites. Future releases bump one Python file instead of three.</li>
-            <li>Backfill highlights: v2.4.3 added <code>truststore</code> integration so the in-app OUI database download works on corporate networks; v2.4.2 fixed the Enter-to-vendor-lookup focus regression; v2.4.0 closed all 37 findings from a full security audit.</li>
+            <li><strong>Two new format detections</strong> &mdash; space-separated MACs (<code>aa bb cc dd ee ff</code>, detection only) and 4-4-4 dash (<code>AABB-CCDD-EEFF</code>, also added as new conversion outputs). Cycle grew from 10 to 12 formats.</li>
+            <li><strong>Fixed double-launch at Windows startup</strong> &mdash; users who upgraded from a pre-v2.4.0 install had two Startup-folder shortcuts (a legacy <code>MAC Address Converter.lnk</code> and the new <code>MAC-Converter.lnk</code>) both firing at boot. The installer now wipes the legacy filename via <code>[InstallDelete]</code>, and the app sweeps known legacy filenames on every launch as belt-and-suspenders.</li>
+        </ul>
+
+        <h2 style="margin-top: 2em;">Earlier highlights</h2>
+        <ul>
+            <li><strong>v2.5.0</strong> &mdash; startup update check (this prompt that brought you to v2.5.1).</li>
+            <li><strong>v2.4.3</strong> &mdash; <code>truststore</code> integration so the in-app OUI download works on corporate networks with TLS-intercepting proxies (Zscaler, FortiGate, etc.).</li>
+            <li><strong>v2.4.2</strong> &mdash; fixed the Enter-to-vendor-lookup focus regression introduced by the v2.4.0 security improvements.</li>
+            <li><strong>v2.4.0</strong> &mdash; closed all 37 findings from a full security audit; atomic writes, single-instance enforcement, real <code>.ico</code> icon, no global keyboard hook.</li>
         </ul>
     </section>
 
@@ -76,7 +83,7 @@
 <script>
 (function() {
     const REPO = 'aleled/mac-converter-2';
-    const FALLBACK_VERSION = '2.5.0';
+    const FALLBACK_VERSION = '2.5.1';
 
     const versionEl = document.querySelector('[data-version]');
     const btn = document.querySelector('[data-download]');

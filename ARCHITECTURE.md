@@ -232,6 +232,13 @@ v2.4.0 chose the Startup-folder shortcut as the single source of truth. `set_aut
 
 **Don't reintroduce both mechanisms** without a deliberate plan — F31 was specifically about avoiding that footgun.
 
+**v2.5.1 — legacy shortcut cleanup.** Even though F31 removed the installer's `[Tasks] startup` entry, users who installed pre-v2.4.0 still had the leftover `MAC Address Converter.lnk` (full app name, with spaces) in their Startup folder. The v2.4.0+ in-app autostart writes a *different* filename — `MAC-Converter.lnk` — so upgrading users ended up with two startup shortcuts, both pointing at the same exe. The app launched twice at boot; the second instance hit the single-instance mutex and showed "MAC Converter is already running" before exiting. **The fix lives in two places** and both are needed:
+
+1. **Runtime sweep** — `_cleanup_legacy_autostart_shortcuts()` runs at `main()` startup and inside `set_autostart_enabled(True)`. It walks `_LEGACY_AUTOSTART_LNK_FILENAMES` (currently `('MAC Address Converter.lnk',)`) and deletes any matches from the user's Startup folder. Idempotent, silent, best-effort.
+2. **Install-time sweep** — Inno Setup `[InstallDelete]` directive removes the same legacy filename during install. Closes the bug immediately on first install/upgrade without waiting for a relaunch.
+
+If a future version ever changes the canonical filename again, append the old name to `_LEGACY_AUTOSTART_LNK_FILENAMES` and add a matching `[InstallDelete]` entry. Don't change `_AUTOSTART_LNK_FILENAME` lightly — every rename creates this same upgrade hazard.
+
 ### 6.8 Update check opens the portal instead of auto-downloading
 
 The startup update prompt's "Upgrade" button opens the GitHub Pages download portal in the user's default browser, then calls `on_quit` to exit the running app. It does **not** download the installer itself.
@@ -336,6 +343,7 @@ The pynput hotkey is the only Win32 hook the app installs. The pre-v2.4.0 format
 | OUI lookup returns no vendor | Either the database isn't loaded (`oui_db.is_loaded` is False — try the Update button in Settings) or the prefix isn't in IEEE's MA-L list. Confirm by opening `oui.csv` and grepping for the prefix. |
 | Autostart doesn't survive reboot | Check that `%APPDATA%\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\MAC-Converter.lnk` exists. If not, the Settings dialog `set_autostart_enabled(True)` call failed — likely pywin32 issue. |
 | App won't launch (single-instance check) | Look for an orphan `MAC-Converter.exe` process in Task Manager. The mutex is released on process exit; if the process is gone but the mutex isn't, restart Windows. |
+| App launches twice at Windows startup ("already running" dialog) | A leftover legacy Startup-folder shortcut (`MAC Address Converter.lnk`, pre-v2.4.0 filename) is still present alongside the canonical `MAC-Converter.lnk`. v2.5.1's runtime sweep removes it on launch; upgrading to v2.5.1 via the installer also fixes it via `[InstallDelete]`. See § 6.7 above. |
 | App launches but immediately exits | Likely a `settings.json` corruption that the rename-and-fallback didn't catch. Move `%APPDATA%\mac-converter-2\settings.json` aside and relaunch — defaults will load. |
 | Update prompt doesn't appear | Either there's no newer release on GitHub, or the network request failed silently. Check stderr for `[update_check]` messages. Verify `update_check_queue` is being drained by `_update_timer` (is the timer running and connected?). |
 
