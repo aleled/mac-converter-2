@@ -80,18 +80,67 @@ def _validate_hotkey_string(hotkey_str):
 
 # --- Autostart via Startup-folder shortcut (Phase 2 fix for F13, F31) ---
 
-def _autostart_lnk_path():
-    """Path to the user's Startup-folder shortcut for MAC Converter."""
+_AUTOSTART_LNK_FILENAME = 'MAC-Converter.lnk'
+
+# Filenames that previous installer/app versions left in the Startup folder.
+# We sweep these on every launch and during set_autostart_enabled(True) so
+# the user doesn't end up with two startup entries firing in parallel.
+_LEGACY_AUTOSTART_LNK_FILENAMES = (
+    'MAC Address Converter.lnk',  # pre-v2.4.0 installer's [Tasks] startup entry
+)
+
+
+def _autostart_startup_dir():
+    """Path to the user's Windows Startup folder."""
     appdata = os.environ.get('APPDATA', os.path.expanduser('~'))
-    startup_dir = os.path.join(
+    return os.path.join(
         appdata, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'
     )
-    return os.path.join(startup_dir, 'MAC-Converter.lnk')
+
+
+def _autostart_lnk_path():
+    """Path to the canonical Startup-folder shortcut for MAC Converter."""
+    return os.path.join(_autostart_startup_dir(), _AUTOSTART_LNK_FILENAME)
 
 
 def is_autostart_enabled():
-    """Return True if the autostart shortcut exists."""
+    """Return True if the canonical autostart shortcut exists.
+
+    Note: this only checks the canonical filename. Legacy shortcuts from
+    pre-v2.4.0 are NOT considered "autostart enabled" — they're treated
+    as leftovers and cleaned up by _cleanup_legacy_autostart_shortcuts.
+    """
     return os.path.exists(_autostart_lnk_path())
+
+
+def _cleanup_legacy_autostart_shortcuts():
+    """Remove legacy autostart shortcuts left by previous app/installer versions.
+
+    Pre-v2.4.0, the Inno Setup installer added a Startup-folder shortcut
+    named "MAC Address Converter.lnk" via its [Tasks]/[Icons] sections.
+    v2.4.0+ switched to in-app autostart using the filename
+    "MAC-Converter.lnk" — different file, same target. Users who upgraded
+    via the new installer ended up with BOTH shortcuts firing at boot, so
+    the app launched twice and the second instance hit the single-instance
+    mutex showing "MAC Converter is already running".
+
+    This helper deletes every name in _LEGACY_AUTOSTART_LNK_FILENAMES from
+    the Startup folder. Best-effort and silent — failures are logged to
+    stderr but don't raise.
+
+    Idempotent: safe to call every launch.
+    """
+    startup_dir = _autostart_startup_dir()
+    for legacy_name in _LEGACY_AUTOSTART_LNK_FILENAMES:
+        legacy_path = os.path.join(startup_dir, legacy_name)
+        if os.path.exists(legacy_path):
+            try:
+                os.remove(legacy_path)
+                print(f"[autostart] removed legacy shortcut: {legacy_name}",
+                      file=sys.stderr)
+            except OSError as e:
+                print(f"[autostart] could not remove {legacy_name}: {e}",
+                      file=sys.stderr)
 
 
 def set_autostart_enabled(enabled):
@@ -99,7 +148,14 @@ def set_autostart_enabled(enabled):
 
     Best-effort: failures are logged to stderr but do not raise. Callers
     should re-query is_autostart_enabled() to confirm.
+
+    Always sweeps legacy shortcuts first so we don't end up with two
+    autostart entries (v2.5.1 fix for the upgrade-from-v2.3.0-double-launch
+    bug).
     """
+    # Always clean up legacy entries before any state change.
+    _cleanup_legacy_autostart_shortcuts()
+
     lnk_path = _autostart_lnk_path()
     if enabled:
         try:
@@ -408,9 +464,11 @@ def handle_hotkey(app):
     # Get all formats
     formats = convert_mac(mac)
 
-    # Auto-cycle to next format
+    # Auto-cycle to next format. Modulo wraps via len(formats) so the
+    # cycle stays in sync if MAC_FORMATS ever grows or shrinks (v2.5.1
+    # added two entries, now 12).
     last_idx = settings.get('last_format_index', 0)
-    next_idx = (last_idx + 1) % 10  # Cycle 0->1->...->9->0
+    next_idx = (last_idx + 1) % len(formats)
 
     # Get converted MAC (formats is list of tuples: [(name, value), ...])
     converted_mac = formats[next_idx][1]
@@ -2063,9 +2121,9 @@ def _validate_settings(d):
     if isinstance(d.get("autostart"), bool):
         out["autostart"] = d["autostart"]
 
-    # last_format_index: int in [0, 9]
+    # last_format_index: int in [0, 11]  (12 formats since v2.5.1)
     lfi = d.get("last_format_index")
-    if isinstance(lfi, int) and not isinstance(lfi, bool) and 0 <= lfi < 10:
+    if isinstance(lfi, int) and not isinstance(lfi, bool) and 0 <= lfi < 12:
         out["last_format_index"] = lfi
 
     # OUI options
@@ -2141,6 +2199,11 @@ def main():
         msg.setIcon(QMessageBox.Information)
         msg.exec_()
         sys.exit(0)
+
+    # v2.5.1: sweep legacy autostart shortcuts on every launch so a
+    # pre-v2.4.0 installer's "MAC Address Converter.lnk" + the new
+    # "MAC-Converter.lnk" can't both fire at boot. Idempotent.
+    _cleanup_legacy_autostart_shortcuts()
 
     global listener, oui_db
     app = QApplication(sys.argv)

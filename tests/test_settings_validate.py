@@ -19,9 +19,20 @@ def test_validate_settings_coerces_bad_types():
     }
     out = clipboard_hotkey._validate_settings(raw)
     assert isinstance(out["last_format_index"], int)
-    assert 0 <= out["last_format_index"] < 10
+    # v2.5.1: format count grew from 10 to 12; range expanded accordingly.
+    assert 0 <= out["last_format_index"] < 12
     assert 1 <= out["notification_duration"] <= 10
     assert isinstance(out["autostart"], bool)
+
+
+def test_validate_settings_accepts_index_eleven():
+    """v2.5.1: index 11 (the new Dash-4char lowercase) is valid; 12 is out of range."""
+    out = clipboard_hotkey._validate_settings({"last_format_index": 11})
+    assert out["last_format_index"] == 11
+
+    # Out-of-range index falls back to default 0
+    out = clipboard_hotkey._validate_settings({"last_format_index": 12})
+    assert out["last_format_index"] == 0
 
 
 def test_validate_settings_keeps_good_values():

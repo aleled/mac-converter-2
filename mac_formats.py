@@ -9,7 +9,8 @@ Functions:
 """
 import re
 
-# Supported MAC address formats (upper/lower)
+# Supported MAC address formats (upper/lower). 12 entries — the hotkey
+# cycles through them in order; the index wraps via len(MAC_FORMATS).
 MAC_FORMATS = [
     ("Colon-separated uppercase",    lambda mac: ':'.join(mac[i:i+2] for i in range(0, 12, 2)).upper()),
     ("Colon-separated lowercase",    lambda mac: ':'.join(mac[i:i+2] for i in range(0, 12, 2)).lower()),
@@ -19,18 +20,28 @@ MAC_FORMATS = [
     ("Hyphen-6char lowercase",       lambda mac: f"{mac[:6].lower()}-{mac[6:].lower()}"),
     ("Dot-separated uppercase",      lambda mac: '.'.join(mac[i:i+4] for i in range(0, 12, 4)).upper()),
     ("Dot-separated lowercase",      lambda mac: '.'.join(mac[i:i+4] for i in range(0, 12, 4)).lower()),
+    # v2.5.1 — 4-4-4 with dashes (e.g. AABB-CCDD-EEFF). Common in some
+    # vendor configs as an alternative to the dot-separated 4-4-4.
+    ("Dash-4char uppercase",         lambda mac: '-'.join(mac[i:i+4] for i in range(0, 12, 4)).upper()),
+    ("Dash-4char lowercase",         lambda mac: '-'.join(mac[i:i+4] for i in range(0, 12, 4)).lower()),
     ("Plain uppercase",              lambda mac: mac.upper()),
     ("Plain lowercase",              lambda mac: mac.lower()),
 ]
 
-# Regex to match MAC addresses in various formats (strict, must be delimited or at string boundaries)
+# Regex to match MAC addresses in various formats (strict, must be delimited or at string boundaries).
+# Space-separated (e.g. "aa bb cc dd ee ff") is recognized as input only —
+# not added to MAC_FORMATS, the app never generates it as output.
 MAC_REGEX = re.compile(
     r"(?<![0-9A-Fa-f])("
     r"(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}"   # colon-separated
     r"|"
     r"(?:[0-9A-Fa-f]{2}-){5}[0-9A-Fa-f]{2}"   # hyphen-separated
     r"|"
-    r"[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}"  # dot-separated
+    r"(?:[0-9A-Fa-f]{2} ){5}[0-9A-Fa-f]{2}"   # v2.5.1: space-separated (detect only)
+    r"|"
+    r"[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}"  # dot-separated 4-4-4
+    r"|"
+    r"[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}"    # v2.5.1: dash-separated 4-4-4
     r"|"
     r"[0-9A-Fa-f]{6}-[0-9A-Fa-f]{6}"          # Hyphen-6char (Cisco)
     r"|"

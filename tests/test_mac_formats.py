@@ -22,6 +22,12 @@ def test_f1_rejects_mixed_separators():
     ("aabbccddeeff", "aabbccddeeff"),
     ("AABBCCDDEEFF", "AABBCCDDEEFF"),
     ("  00:1A:2B:3C:4D:5E  ", "001A2B3C4D5E"),
+    # v2.5.1: space-separated (detect only — not in MAC_FORMATS)
+    ("aa bb cc dd ee ff", "aabbccddeeff"),
+    ("AA BB CC DD EE FF", "AABBCCDDEEFF"),
+    # v2.5.1: 4-4-4 with dashes (detect + new conversion output)
+    ("AABB-CCDD-EEFF", "AABBCCDDEEFF"),
+    ("aabb-ccdd-eeff", "aabbccddeeff"),
 ])
 def test_detect_mac_happy_path(text, expected):
     assert detect_mac(text) == expected
@@ -38,10 +44,14 @@ def test_detect_mac_rejects(text):
     assert detect_mac(text) is None
 
 
-def test_convert_mac_emits_ten_formats():
+def test_convert_mac_emits_twelve_formats():
+    """v2.5.1: format count grew from 10 to 12 with Dash-4char upper+lower."""
     formats = convert_mac("001A2B3C4D5E")
-    assert len(formats) == 10
+    assert len(formats) == 12
     by_desc = dict(formats)
     assert by_desc["Colon-separated uppercase"] == "00:1A:2B:3C:4D:5E"
     assert by_desc["Hyphen-6char uppercase"] == "001A2B-3C4D5E"
     assert by_desc["Dot-separated lowercase"] == "001a.2b3c.4d5e"
+    # New v2.5.1 formats — 4-4-4 with dashes
+    assert by_desc["Dash-4char uppercase"] == "001A-2B3C-4D5E"
+    assert by_desc["Dash-4char lowercase"] == "001a-2b3c-4d5e"
