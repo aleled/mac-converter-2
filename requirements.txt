@@ -4,7 +4,8 @@
 pystray
 Pillow
 pyperclip
-pynput
+# (pynput removed in v2.5.2 — the global hotkey now uses the Win32
+# RegisterHotKey API via ctypes, see win_hotkey.py)
 PyQt5
 pywin32
 # truststore makes urllib use Windows' certificate store so corporate

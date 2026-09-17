@@ -28,9 +28,8 @@ This software uses the following open source libraries:
 - PyQt5 (GPL/LGPL)
 - pystray (MIT)
 - Pillow (PIL Fork, HPND)
-- keyboard (MIT)
 - pyperclip (BSD)
 - pywin32 (PSF)
-- pynput (GPLv3)
+- truststore (MIT)
 
 See each library's documentation for license details.

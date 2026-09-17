@@ -12,7 +12,7 @@ MAC Address Converter Utility - Session Progress (2025-06-05)
 clipboard_hotkey.py
 
 Listens for a global hotkey, checks clipboard for a valid MAC address, and if found, prompts user to select a format and copies the result to clipboard.
-Uses pynput for cross-platform hotkey support (no root required on Linux).
+The hotkey is registered with the Win32 RegisterHotKey API (see win_hotkey.py) — no keyboard hook, no admin rights.
 """
 
 import pyperclip
@@ -34,7 +34,7 @@ from PyQt5.QtGui import QFont, QColor, QIcon, QBrush, QPixmap, QCursor, QKeySequ
 import queue
 import ctypes
 import time
-from pynput import keyboard
+import win_hotkey
 import json
 
 # --- Atomic settings I/O (Phase 2 fix for F7, F16, F23, F28) ---
@@ -57,24 +57,15 @@ def _atomic_write_json(path, data):
 def _validate_hotkey_string(hotkey_str):
     """Return None if valid, an error message string if not.
 
-    Uses pynput.keyboard.HotKey.parse to mirror what listen_hotkey will do.
-    pynput canonical form wraps multi-character named keys (e.g. ctrl, shift,
-    alt, cmd) in angle brackets but leaves single-character keys bare.
+    Uses win_hotkey.parse_hotkey — the same parser listen_hotkey uses — so
+    anything that passes validation here can actually be registered.
+    (Whether another app already owns the chord is only known at
+    registration time; listen_hotkey reports that separately.)
     """
-    if not hotkey_str or not hotkey_str.strip():
-        return "Hotkey cannot be empty"
     try:
-        parts = []
-        for k in hotkey_str.split('+'):
-            token = k.strip().lower()
-            if not token:
-                raise ValueError("empty key segment")
-            # Single-character keys are passed bare; named keys go in <>.
-            parts.append(token if len(token) == 1 else f'<{token}>')
-        canonical = '+'.join(parts)
-        keyboard.HotKey.parse(canonical)
+        win_hotkey.parse_hotkey(hotkey_str)
         return None
-    except (ValueError, KeyError) as e:
+    except ValueError as e:
         return f"Invalid hotkey: {e}"
 
 
@@ -248,11 +239,11 @@ def on_quit(icon, item):
     # instances aren't reliably caught by the widget-walk below).
     if _update_timer is not None:
         _update_timer.stop()
-    # F29: give the pynput listener a chance to terminate cleanly
+    # F29 / v2.5.2: unregister the global hotkey and end its message loop.
+    # GlobalHotkey.stop() posts WM_QUIT and joins; safe if never started.
     if listener is not None:
         try:
             listener.stop()
-            listener.join(timeout=2.0)
         except RuntimeError:
             pass
     # F26: give the OUI worker a chance to finish os.replace before the
@@ -345,8 +336,9 @@ def show_format_popup(app, formats, current_index, duration_seconds, mac_normali
     # (post-F19, where the system-wide pynput listener was removed).
     #
     # Windows blocks SetForegroundWindow from a process that didn't
-    # receive the last user input event — pynput's hook is passive, so
-    # the converter process doesn't count. The AttachThreadInput trick
+    # receive the last user input event — the keypress went to whatever
+    # app was in front, and our hotkey arrives as a WM_HOTKEY message on a
+    # background thread, not as input to the Qt thread. The AttachThreadInput trick
     # temporarily merges our input queue with the foreground thread's,
     # which lets SetForegroundWindow succeed. Deferred one event-loop
     # tick so the window is fully realized when we grab focus.
@@ -2020,63 +2012,55 @@ def tray_app():
     except Exception as e:
         print(f"[ERROR] Tray app failed: {e}")
 
+DEFAULT_HOTKEY = 'alt+shift+m'
+
+
 def listen_hotkey(app):
     """
-    Start global hotkey listener using configurable hotkey from settings.
-    Uses pynput.keyboard for cross-platform support (no admin required).
+    Register the global hotkey from settings using the Win32 RegisterHotKey API.
+
+    v2.5.2: replaces pynput.keyboard.Listener. That was a WH_KEYBOARD_LL
+    low-level hook that routed every keystroke on the machine through
+    Python, which broke Razer Synapse macros/shortcuts (and could affect
+    any other tool that injects or hooks keyboard input). RegisterHotKey
+    installs no hook — Windows sends one WM_HOTKEY message for our chord
+    and nothing else. See win_hotkey.py and ARCHITECTURE.md § 6.11.
 
     Args:
         app (QApplication): The running Qt application instance.
 
     Returns:
-        The keyboard listener instance for later cleanup.
+        The GlobalHotkey instance (a thread) for later cleanup via .stop().
     """
 
     def on_activate():
+        # Runs on the hotkey's message-loop thread. handle_hotkey only
+        # touches the clipboard and posts to queues — never Qt widgets.
         handle_hotkey(app)
 
-    # Parse hotkey from settings (e.g., 'alt+shift+m' -> '<alt>+<shift>+m')
-    hotkey_str = settings.get('hotkey', 'alt+shift+m')
-
-    def format_hotkey_for_pynput(hotkey_str):
-        """
-        Convert hotkey string like 'alt+shift+m' to pynput format '<alt>+<shift>+m'.
-        Special keys (alt, shift, ctrl, etc.) get angle brackets; regular chars don't.
-        """
-        special_keys = {
-            'alt', 'shift', 'ctrl', 'control', 'win', 'cmd',
-            'tab', 'enter', 'space', 'backspace', 'delete', 'escape', 'esc',
-            'home', 'end', 'pageup', 'pagedown', 'insert', 'f1', 'f2', 'f3', 'f4',
-            'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12', 'up', 'down', 'left', 'right'
-        }
-        parts = hotkey_str.lower().split('+')
-        formatted_parts = []
-        for part in parts:
-            if part in special_keys:
-                formatted_parts.append(f'<{part}>')
-            else:
-                formatted_parts.append(part)  # Regular chars without angle brackets
-        return '+'.join(formatted_parts)
-
+    hotkey_str = settings.get('hotkey', DEFAULT_HOTKEY)
     try:
-        formatted = format_hotkey_for_pynput(hotkey_str)
-        parsed_hotkey = keyboard.HotKey.parse(formatted)
-        print(f"[INFO] Hotkey '{hotkey_str}' registered as '{formatted}' (no admin required).")
-    except Exception as e:
-        print(f"[ERROR] Invalid hotkey '{hotkey_str}', using default 'alt+shift+m': {e}")
-        parsed_hotkey = keyboard.HotKey.parse('<alt>+<shift>+m')
+        hk = win_hotkey.GlobalHotkey(hotkey_str, on_activate)
+    except ValueError as e:
+        print(f"[ERROR] Invalid hotkey '{hotkey_str}', using default '{DEFAULT_HOTKEY}': {e}",
+              file=sys.stderr)
+        hotkey_str = DEFAULT_HOTKEY
+        hk = win_hotkey.GlobalHotkey(hotkey_str, on_activate)
 
-    h = keyboard.HotKey(parsed_hotkey, on_activate)
-
-    def for_canonical(f):
-        return lambda k: f(l.canonical(k))
-
-    l = keyboard.Listener(
-        on_press=for_canonical(h.press),
-        on_release=for_canonical(h.release)
-    )
-    l.start()
-    return l
+    hk.start()
+    if hk.wait_registered(timeout=3):
+        print(f"[INFO] Hotkey '{hotkey_str}' registered (RegisterHotKey, no keyboard hook).")
+    else:
+        # Most likely another application already owns this chord.
+        # Tell the user instead of failing silently.
+        message = f"{hk.error}. Choose a different hotkey in Settings, then restart the app."
+        print(f"[ERROR] {message}", file=sys.stderr)
+        try:
+            if tray_icon and tray_icon_ready.is_set():
+                tray_icon.notify(message, "MAC Converter — hotkey not active")
+        except Exception:
+            pass
+    return hk
 
 # --- Settings: Load/Save Logic ---
 SETTINGS_DIR = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'mac-converter-2')

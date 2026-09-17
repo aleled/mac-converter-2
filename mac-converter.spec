@@ -8,8 +8,6 @@ a = Analysis(
     binaries=[],
     datas=[('icon-v1.png', '.')],
     hiddenimports=[
-        'pynput.keyboard._win32',
-        'pynput.mouse._win32',
         'pystray._win32',
         'win32com.client',
         'win32event',
