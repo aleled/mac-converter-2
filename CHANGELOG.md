@@ -5,6 +5,26 @@
 
 # Changelog
 
+## [2.5.2] - 2026-09-17
+### Fixed
+- **Razer Synapse shortcuts and macros stopped working while the app was running.** The global hotkey was implemented with `pynput.keyboard.Listener`, a `WH_KEYBOARD_LL` low-level keyboard hook that routes every keystroke on the machine through a Python callback. When the process was busy the callbacks lagged past Windows' hook timeout, and keystrokes from other input tools were delayed or dropped. The hotkey now uses the Win32 `RegisterHotKey` API: Windows sends a single `WM_HOTKEY` message for the configured chord and the app installs no keyboard hook at all.
+
+### Added
+- `win_hotkey.py` — `parse_hotkey()` and `GlobalHotkey` (RegisterHotKey on a dedicated message-loop thread, `MOD_NOREPEAT`, clean `UnregisterHotKey` on stop).
+- Tray notification at startup when the chosen hotkey is already owned by another application (previously failed silently).
+- 24 new tests, including real registration against Windows, the already-in-use path, re-registration after stop, and an injected keypress reaching the callback. 66 total.
+
+### Changed
+- Hotkeys must include at least one modifier (Alt, Ctrl, Shift or Win). Supported keys: a–z, 0–9, F1–F24, space, tab, enter, esc, backspace, delete, insert, home, end, pageup, pagedown, arrow keys. An invalid saved hotkey falls back to `alt+shift+m`.
+- Settings dialog validation uses the same parser as registration.
+
+### Removed
+- `pynput` dependency (requirements, PyInstaller hidden imports).
+- Stale `keyboard` and `pynput` entries from the LICENSE third-party list; added `truststore`.
+
+### Documentation
+- Corrected ARCHITECTURE.md and SECURITY.md: they stated the pynput hotkey only saw the configured chord. It saw every keystroke.
+
 ## [2.5.1] - 2026-05-22
 ### Added
 - **Detect space-separated MAC addresses.** Input like `aa bb cc dd ee ff` is now recognized as a valid MAC. Not added to the conversion cycle — the app never generates this format as output, just accepts it as input.

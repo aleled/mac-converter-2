@@ -1,7 +1,7 @@
 # TODO / Feature Tracker
 
-**Current Version:** 2.5.1 (Production Ready)
-**Last Updated:** 2026-05-22
+**Current Version:** 2.5.2 (Production Ready)
+**Last Updated:** 2026-09-17
 
 ---
 
@@ -158,7 +158,16 @@
 
 ---
 
-## Current Release (v2.5.1)
+### ✅ Milestone 18: RegisterHotKey — no more keyboard hook (v2.5.2)
+- [x] Diagnosed Razer Synapse shortcuts/macros breaking while the app runs: pynput `WH_KEYBOARD_LL` hook routed every keystroke through Python; GIL contention → hook timeouts → delayed/dropped injected input
+- [x] New `win_hotkey.py`: `parse_hotkey()` + `GlobalHotkey` thread using `RegisterHotKey` / `GetMessageW` / `UnregisterHotKey` via ctypes, `MOD_NOREPEAT`
+- [x] Settings validation uses the same parser; hotkey now requires at least one modifier
+- [x] Tray notification when the chosen hotkey is already owned by another app (was a silent failure)
+- [x] `pynput` removed from requirements, PyInstaller hidden imports and LICENSE third-party list (also dropped stale `keyboard`, added `truststore`)
+- [x] 24 new tests incl. real registration, already-in-use, re-register after stop, injected keypress delivery; app verified end to end from source with pynput uninstalled
+- [x] Corrected ARCHITECTURE.md / SECURITY.md, which had wrongly said the pynput hotkey didn't see every keystroke
+
+## Current Release (v2.5.2)
 
 **Status:** Production Ready ✅
 
@@ -183,7 +192,7 @@
 
 ### Build Artifacts
 - Standalone executable: `dist/MAC-Converter.exe` (~51 MB, real `.ico` icon embedded)
-- Windows installer: `installer-output/MAC-Converter-Setup-v2.5.1.exe` (~54 MB, 12 conversion formats, legacy-shortcut cleanup, startup update check)
+- Windows installer: `installer-output/MAC-Converter-Setup-v2.5.2.exe` (~54 MB, 12 conversion formats, legacy-shortcut cleanup, startup update check)
 - Source code: clean, audited, tested, fully documented (ARCHITECTURE.md, TROUBLESHOOTING.md, BUILDING.md, etc.)
 
 ---
@@ -321,7 +330,7 @@ pyinstaller mac-converter.spec
 
 ### Code Quality Standards
 - No admin rights required for any feature
-- Use pynput for hotkey registration
+- Use Win32 RegisterHotKey for the global hotkey (win_hotkey.py) — never a keyboard hook
 - Store settings in %APPDATA%\mac-converter-2\
 - Use dark theme for all UI elements
 - Maintain thread-safe operations

@@ -49,14 +49,14 @@ Verify everything is wired up:
 python --version
 python -m pytest --version
 
-# Run the regression suite — should report 24 passed
+# Run the regression suite — should report 66 passed
 python -m pytest
 
 # Optionally launch the app from source to confirm it works
 python clipboard_hotkey.py
 ```
 
-If `pytest` reports anything other than 24 passed, **stop and investigate** before building. Don't ship a build with failing tests.
+If `pytest` reports anything other than 66 passed, **stop and investigate** before building. Don't ship a build with failing tests.
 
 ---
 
@@ -215,9 +215,9 @@ Within ~30 seconds of publishing, the [download portal](https://aleled.github.io
 
 ## 7. Troubleshooting the build
 
-### PyInstaller "ModuleNotFoundError: No module named 'pynput.keyboard._win32'"
+### PyInstaller "ModuleNotFoundError" for a hidden import (e.g. `pystray._win32`)
 
-Even though `mac-converter.spec` lists this as a hidden import, sometimes PyInstaller's hook resolution misbehaves. Try:
+Even though `mac-converter.spec` lists it as a hidden import, sometimes PyInstaller's hook resolution misbehaves. Try:
 
 ```powershell
 pip install --upgrade pyinstaller

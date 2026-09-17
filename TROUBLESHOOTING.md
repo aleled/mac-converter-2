@@ -6,6 +6,18 @@ If something isn't working, scan this list for your symptom. Each entry has a li
 
 ---
 
+## Razer Synapse (or other keyboard/mouse software) shortcuts stop working while the app runs
+
+**Symptoms:** macros, remaps or shortcuts from Razer Synapse, Logitech G Hub, AutoHotkey or similar tools stop working or become unreliable while MAC Converter is running, and work again after you quit it from the tray.
+
+**Cause:** versions up to **v2.5.1** implemented the hotkey with a low-level keyboard hook that intercepted every keystroke on the machine. When the app was busy, keystrokes — including ones injected by those tools — were delayed or dropped.
+
+**Fix:** upgrade to **v2.5.2 or later** from the [download portal](https://aleled.github.io/mac-converter-2/). The hotkey now uses Windows' `RegisterHotKey` API and the app installs no keyboard hook at all.
+
+If it still happens on v2.5.2+: right-click tray → About and confirm the version, then check whether your Synapse binding and MAC Converter use the *same* key combination. Only one app can own a combination; change one of them.
+
+---
+
 ## Hotkey doesn't do anything
 
 **Symptoms:** You press Alt+Shift+M (or your configured hotkey) and nothing happens — no popup, no notification, no tray flash.
@@ -14,7 +26,7 @@ If something isn't working, scan this list for your symptom. Each entry has a li
 
 ### 1. The hotkey is already used by another app
 
-Windows lets multiple apps register the same hotkey, but only the first one to register wins. Common conflicts: Snipping Tool (`Win+Shift+S`), Microsoft Teams (various Alt combos), screen recorders.
+Windows only lets one application own a given hotkey. Since v2.5.2, if your chord is already taken, the app shows a tray notification at startup: **"Hotkey '…' is already in use by another application"**. Common conflicts: Snipping Tool (`Win+Shift+S`), Microsoft Teams (various Alt combos), screen recorders, Razer Synapse / Logitech G Hub bindings.
 
 **Fix:** right-click tray icon → Settings → change the hotkey to something unusual (e.g. `ctrl+shift+alt+m`). Click Save. **Restart the app** — hotkey changes only take effect on app restart (this is the one settings change that isn't live).
 
@@ -24,11 +36,9 @@ Check the Windows tray (the up-arrow `^` in the bottom-right). If the MAC Conver
 
 **Fix:** launch the app from the Start Menu, desktop shortcut, or `%PROGRAMFILES%\MAC-Converter\MAC-Converter.exe`. If it immediately exits, see "App won't start" below.
 
-### 3. pynput's keyboard hook was blocked by antivirus
+### 3. Antivirus blocked the app
 
-Some endpoint protection products (especially enterprise ones — Cylance, CrowdStrike, SentinelOne) flag low-level keyboard hooks as suspicious. The app may launch but silently fail to register the hotkey.
-
-**Fix:** check your AV's quarantine / activity log for `pynput` or `MAC-Converter.exe`. Add an exception. If you can't add an exception, this app may not be usable in your environment — there's no admin-free alternative to pynput's hook.
+Since v2.5.2 the app installs no keyboard hook (it uses Windows' `RegisterHotKey`), which removes the most common reason endpoint protection flagged it. If your AV still interferes, check its quarantine / activity log for `MAC-Converter.exe` and add an exception.
 
 ### 4. The hotkey value in settings.json is corrupt
 
@@ -81,7 +91,7 @@ If you get the error specifically for `pywin32`, run `python venv\Scripts\pywin3
 
 ### 4. Antivirus quarantined the .exe
 
-The exe is unsigned and uses Win32 keyboard hooks — common antivirus false-positive triggers (UPX was disabled in v2.4.0 to reduce this, but it's not fully eliminated).
+The exe is unsigned — a common antivirus false-positive trigger (UPX was disabled in v2.4.0 and the keyboard hook removed in v2.5.2 to reduce this, but it's not fully eliminated).
 
 **Fix:** restore the exe from your AV's quarantine, then add an exception for `%PROGRAMFILES%\MAC-Converter\MAC-Converter.exe`. If your endpoint security doesn't allow exceptions, you may need to use the standalone `MAC-Converter.exe` (the same binary, just not packaged in an installer) — same issue but easier to put in a custom location your AV trusts.
 

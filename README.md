@@ -2,7 +2,7 @@
 
 A lightweight Windows system tray utility for converting MAC addresses between different formats with a global hotkey, auto-cycling format selection, and clipboard integration.
 
-**Current Version:** 2.5.1
+**Current Version:** 2.5.2
 **Status:** Production-ready ✅
 **License:** MIT
 **Author:** Alejandro Lichtenfeld
@@ -12,12 +12,24 @@ A lightweight Windows system tray utility for converting MAC addresses between d
 **[https://aleled.github.io/mac-converter-2/](https://aleled.github.io/mac-converter-2/)** — one-click installer for Windows. The download portal auto-points at the latest release.
 
 Direct links to the latest version:
-- **[MAC-Converter-Setup-v2.5.1.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.5.1/MAC-Converter-Setup-v2.5.1.exe)** — Windows installer (~54 MB)
-- **[MAC-Converter.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.5.1/MAC-Converter.exe)** — Standalone executable (~51 MB)
+- **[MAC-Converter-Setup-v2.5.2.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.5.2/MAC-Converter-Setup-v2.5.2.exe)** — Windows installer (~54 MB)
+- **[MAC-Converter.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.5.2/MAC-Converter.exe)** — Standalone executable (~51 MB)
 
 ---
 
 ## What's new
+
+### 2.5.2 (2026-09-17) — No more keyboard hook (fixes Razer Synapse shortcuts)
+
+While MAC Converter was running, shortcuts and macros defined in **Razer Synapse** stopped working, and came back when the app was closed.
+
+**Cause:** the global hotkey was implemented with `pynput`, which installs a Windows *low-level keyboard hook*. That routes **every keystroke on the machine** through a Python function before any other app sees it. When the app was busy, those keystrokes queued up behind Python, Windows' hook timeout kicked in, and input from tools like Synapse (which inject timed key sequences) was delayed or dropped.
+
+**Fix:** the hotkey now uses Windows' native **`RegisterHotKey`** API. The app tells Windows "notify me when Alt+Shift+M is pressed" and Windows sends one message for that chord — nothing else. No hook, no per-keystroke code, no interference with other input tools. Still no admin rights.
+
+- **New:** if another application already owns your chosen hotkey, Windows refuses the registration and the app now shows a tray notification telling you to pick a different one (previously it failed silently).
+- **Stricter validation:** a hotkey must include at least one modifier (Alt, Ctrl, Shift or Win). A bare key would be stolen from every app.
+- `pynput` is no longer a dependency.
 
 ### 2.5.1 (2026-05-22) — Format expansion + autostart double-launch fix
 
@@ -52,7 +64,7 @@ Attempted to fix the Enter regression by calling `activateWindow()`, `setFocus()
 A focused bug-fix release closing **37 audit findings** (5 high, 12 medium, 20 low) from a full security and correctness review of the codebase. Highlights:
 
 - 🛡️ **Locked clipboard no longer crashes the hotkey listener.** All `pyperclip` calls are wrapped — clipboard contention from Snipping Tool / RDP / etc. is now a recoverable notification rather than a silent death.
-- 🔒 **No more system-wide keyboard hook.** The format popup's Enter key was previously detected via a global pynput listener that received every keystroke (including passwords in other apps). It now uses a Qt-scoped `QShortcut`.
+- 🔒 **No more system-wide keyboard hook for the popup's Enter key.** *(Correction: the main hotkey itself remained a low-level hook until v2.5.2.)* The format popup's Enter key was previously detected via a global pynput listener that received every keystroke (including passwords in other apps). It now uses a Qt-scoped `QShortcut`.
 - ✅ **"Start with Windows" actually works now.** The checkbox was previously cosmetic; it now creates/removes a real shortcut in the Startup folder.
 - 🚫 **Single-instance check.** Launching a second copy shows a notification and exits cleanly — no more double-hotkey-fire or settings races.
 - 🔐 **Atomic settings & OUI writes.** Crashes mid-write no longer corrupt your configuration. Corrupt `settings.json` is renamed aside (not silently obliterated) so you can recover hand edits.
@@ -84,7 +96,9 @@ The "last format index" is persisted in `settings.json`, so the cycle is **resum
 
 ### Global hotkey
 
-Default: `Alt+Shift+M`. Configurable in Settings. Uses `pynput.keyboard.GlobalHotKeys` — a low-level Win32 hook that works **without admin rights**. The hotkey is bound at startup; changes require an app restart (the only setting with that limitation).
+Default: `Alt+Shift+M`. Configurable in Settings. Registered with the Windows **`RegisterHotKey`** API (see `win_hotkey.py`): Windows notifies the app only when that exact chord is pressed. **No keyboard hook** is installed, so the app never sees your other keystrokes and can't interfere with tools like Razer Synapse, AutoHotkey or password managers. Works **without admin rights**. The hotkey is bound at startup; changes require an app restart (the only setting with that limitation).
+
+If another application already owns the chord, Windows refuses it and a tray notification tells you to choose a different hotkey.
 
 Invalid hotkeys are caught on Save (since v2.4.0) — you get an inline error label and the bad value isn't persisted. If you somehow get a corrupt hotkey into `settings.json` (e.g. hand-edit), the listener falls back to the default at launch rather than refusing to start.
 
@@ -162,15 +176,15 @@ Settings writes are **atomic** (temp file + `os.replace`) and **locked** (three 
 
 ### No admin rights required
 
-The app uses `pynput` for hotkey registration (low-level Win32 hook, works without elevation), writes settings to `%APPDATA%` (user-writable), creates the autostart shortcut in the user's Startup folder (no registry, no admin). The installer declares `PrivilegesRequired=lowest` and installs into `%LOCALAPPDATA%\Programs\MAC-Converter\` for non-admin users.
+The app registers its hotkey with Windows' `RegisterHotKey` API (no hook, works without elevation), writes settings to `%APPDATA%` (user-writable), creates the autostart shortcut in the user's Startup folder (no registry, no admin). The installer declares `PrivilegesRequired=lowest` and installs into `%LOCALAPPDATA%\Programs\MAC-Converter\` for non-admin users.
 
 ### Single-instance enforcement
 
 Launching a second copy of the app shows "MAC Converter is already running" and exits cleanly. Uses a Win32 named mutex (`Global\MAC-Converter-2-SingleInstance`) — works across RDP sessions too. Prevents the double-hotkey-fire and `settings.json` race that v2.3.0 and earlier could exhibit.
 
-### 24 pytest regression tests
+### 66 pytest regression tests
 
-Pure-logic surfaces (`mac_formats.py`, `oui_lookup.py`, settings I/O) are covered by 24 automated tests. They run in under a second and are green on every commit. See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`tests/`](tests/) for the suite.
+Pure-logic surfaces (`mac_formats.py`, `oui_lookup.py`, `update_check.py`, `win_hotkey.py`, settings I/O, autostart cleanup) are covered by 66 automated tests. The hotkey tests register real chords with Windows and inject a real keypress to confirm delivery. They run in under a second and are green on every commit. See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`tests/`](tests/) for the suite.
 
 UI behavior is verified manually before each release — PyQt5 widget tests would require significant extra scaffolding (probably `pytest-qt`) that isn't in scope today.
 
@@ -304,7 +318,7 @@ The app reads this file on startup and writes it whenever you save in the Settin
 
 | Key | Type | Valid range | Default | Description | Takes effect |
 |-----|------|-------------|---------|-------------|--------------|
-| `hotkey` | string | `<modifier>+<modifier>+<key>` parseable by pynput | `"alt+shift+m"` | The global hotkey that triggers MAC conversion | On app restart |
+| `hotkey` | string | One or more of `alt` / `ctrl` / `shift` / `win`, plus one key: `a`–`z`, `0`–`9`, `f1`–`f24`, or `space` `tab` `enter` `esc` `backspace` `delete` `insert` `home` `end` `pageup` `pagedown` `up` `down` `left` `right` | `"alt+shift+m"` | The global hotkey that triggers MAC conversion | On app restart |
 | `notification_duration` | int | 1–10 | `3` | Seconds the format popup stays visible before auto-closing | Immediate |
 | `autostart` | bool | true / false | `false` | Whether the Startup-folder shortcut exists. Reading this is **derived from the filesystem** — the JSON value is just a cache. | Immediate |
 | `last_format_index` | int | 0–9 | `0` | Index into the format list. Bumped on every hotkey press. Persisted so cycling resumes across app restarts. | Read on each hotkey press |
@@ -344,8 +358,8 @@ If the hotkey conflicts with another app (Windows lets multiple apps register th
 
 When you press the hotkey:
 
-1. **pynput's listener thread** wakes up. It reads the clipboard, detects whether the contents are a valid MAC address using a strict regex in `mac_formats.py`, normalizes the MAC to 12 hex chars (no separators), looks up the next format in the cycle, and writes the new format back to the clipboard.
-2. The listener thread **puts a request onto a queue** (it never touches Qt widgets — that's a hard invariant). A 50ms `QTimer` on the Qt main thread is polling that queue.
+1. **Windows sends a `WM_HOTKEY` message** to the app's hotkey thread (registered via `RegisterHotKey` — no keyboard hook). That thread reads the clipboard, detects whether the contents are a valid MAC address using a strict regex in `mac_formats.py`, normalizes the MAC to 12 hex chars (no separators), looks up the next format in the cycle, and writes the new format back to the clipboard.
+2. The hotkey thread **puts a request onto a queue** (it never touches Qt widgets — that's a hard invariant). A 50ms `QTimer` on the Qt main thread is polling that queue.
 3. The Qt main thread **creates a `FormatSelectorPopup`** (a `QDialog` with `Qt.Tool` flag — no taskbar entry), positions it bottom-right, calls `.show()`, then defers a focus-grab routine that uses the Win32 `AttachThreadInput` trick to satisfy Windows' foreground-steal rules.
 4. If you press **Enter** while the popup is visible: a `QShortcut` (application-scoped) and `keyPressEvent` override both call `_on_enter_pressed`. The handler puts another request onto a separate queue. A different `QTimer` picks it up, calls `oui_db.lookup(mac_prefix)`, and shows the vendor popup.
 5. If you press **Escape** or click anywhere outside, or the auto-close timer fires, the popup closes.
@@ -382,8 +396,8 @@ Uninstalling removes everything in the install folder and the Start Menu entries
 
 - **OS**: Windows 7 or later (Windows 10/11 recommended)
 - **Python**: 3.8+ (if running from source)
-- **Admin Rights**: Not required (uses pynput for hotkey)
-- **Dependencies**: PyQt5, pynput, pyperclip, pystray, pillow
+- **Admin Rights**: Not required (hotkey uses Windows' RegisterHotKey API)
+- **Dependencies**: PyQt5, pyperclip, pystray, Pillow, pywin32, truststore
 
 ---
 
@@ -394,8 +408,10 @@ Uninstalling removes everything in the install folder and the Start Menu entries
 ```
 mac-converter-2/
 ├── clipboard_hotkey.py      # Main application (UI, hotkey, tray, popups, settings, autostart)
-├── mac_formats.py           # MAC format detection and conversion (pure logic, no Qt/pynput)
+├── mac_formats.py           # MAC format detection and conversion (pure logic, no Qt)
 ├── oui_lookup.py            # OUI vendor database: download, parse, lookup (no Qt)
+├── win_hotkey.py            # Global hotkey via Win32 RegisterHotKey (no keyboard hook, no Qt)
+├── update_check.py          # Startup update check + APP_VERSION single source of truth
 ├── mac-converter.spec       # PyInstaller configuration
 ├── installer.iss            # Inno Setup installer script
 ├── icon-v1.png              # App icon (source PNG)
@@ -406,12 +422,15 @@ mac-converter-2/
 ├── requirements.txt         # Python runtime dependencies
 ├── requirements-dev.txt     # Python test dependencies (pytest)
 ├── pytest.ini               # pytest configuration
-├── tests/                   # 24 regression tests (mac_formats, oui_lookup, settings)
+├── tests/                   # 66 regression tests
 │   ├── conftest.py          # Pytest fixtures
 │   ├── test_mac_formats.py  # F1 regression + format conversion correctness
 │   ├── test_oui_lookup.py   # F2/F3/F4/F5 OUI download hardening
 │   ├── test_settings_atomic.py    # F7/F23 atomic write
-│   └── test_settings_validate.py  # F8/F15/F24 load validation + corrupt recovery
+│   ├── test_settings_validate.py  # F8/F15/F24 load validation + corrupt recovery
+│   ├── test_update_check.py       # Startup update check
+│   ├── test_autostart_cleanup.py  # Legacy Startup-shortcut sweep (v2.5.1)
+│   └── test_win_hotkey.py         # Hotkey parsing + real RegisterHotKey registration and keypress (v2.5.2)
 ├── docs/                    # GitHub Pages portal + audit + design specs + plans
 │   ├── index.html           # Portal landing page
 │   ├── styles.css           # Portal stylesheet
@@ -450,7 +469,7 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-Expected: 24 passed. The suite covers pure-logic fixes in `mac_formats.py`, `oui_lookup.py`, and settings I/O. UI behavior is verified manually before each release — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Expected: 66 passed. The suite covers pure-logic fixes in `mac_formats.py`, `oui_lookup.py`, and settings I/O. UI behavior is verified manually before each release — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ### Building Your Own Installer
 
@@ -511,6 +530,10 @@ Common quick fixes are below. For the **complete** user-facing troubleshooting g
 2. Look for `settings.json.corrupt-<timestamp>` files — these indicate JSON corruption recovered automatically (each is a backup of the corrupt file)
 3. If your antivirus is locking the file, add an exception for the `%APPDATA%\mac-converter-2\` folder
 
+### Other apps' shortcuts or macros stop working (e.g. Razer Synapse)
+
+Fixed in **v2.5.2**. Older versions installed a low-level keyboard hook that could delay or drop keystrokes from input tools. Upgrade from the [download portal](https://aleled.github.io/mac-converter-2/).
+
 ### Tray icon missing
 
 1. Check the Windows system tray overflow (`^` arrow in the bottom-right)
@@ -529,6 +552,7 @@ Common quick fixes are below. For the **complete** user-facing troubleshooting g
 
 ## Version History
 
+- **2.5.2** (2026-09-17): Global hotkey moved from a pynput low-level keyboard hook to Windows' `RegisterHotKey` — fixes Razer Synapse shortcuts/macros breaking while the app runs; notification when the chosen hotkey is already taken; pynput dependency removed.
 - **2.5.1** (2026-05-22): Format expansion (12 formats now; new 4-4-4 dash variant; space-separated detection) + fixed double-launch at Windows startup caused by legacy installer shortcut.
 - **2.5.0** (2026-05-22): Startup update check — app fetches the latest release from the GitHub API on launch; if a newer version exists, a modal prompt offers Upgrade (opens the portal in browser, exits app) or Skip. `APP_VERSION` consolidated into a single source of truth in `update_check.py`.
 - **2.4.3** (2026-05-15): Corporate-network TLS interception — added `truststore` so `urllib` uses Windows' cert store; new "Import from file…" Settings button as belt-and-suspenders.
@@ -546,10 +570,10 @@ See [`CHANGELOG.md`](CHANGELOG.md) for the per-finding fix list.
 
 ## Quality & Testing
 
-- ✅ 24 automated regression tests (pytest) — green on every commit
+- ✅ 66 automated regression tests (pytest) — green on every commit
 - ✅ Full security & bug audit completed for v2.4.0 (37 findings, all closed) — see [`docs/AUDIT-2026-05-14.md`](docs/AUDIT-2026-05-14.md)
 - ✅ Atomic file writes for settings and OUI database (no corruption under crash/race)
-- ✅ No system-wide keyboard hooks beyond the configurable hotkey itself
+- ✅ No keyboard hooks at all — the global hotkey uses Windows' `RegisterHotKey` (since v2.5.2)
 - ✅ Single-instance enforcement (Win32 named mutex)
 - ✅ Graceful clipboard-error handling
 - ✅ Corrupt-settings recovery (renamed aside, defaults loaded, app continues)

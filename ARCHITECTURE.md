@@ -2,13 +2,13 @@
 
 This document is the **"how it actually works"** reference. It explains the codebase module by module, the threading model, the data flow between components, the key design decisions and the reasoning behind them, and where things live on disk. The goal is that someone (including future-you) can pick this up cold months from now and understand why the code looks the way it does — and crucially, **what to preserve when fixing or changing something so we don't regress to a previous broken state.**
 
-**Last updated:** 2026-05-15 (v2.4.2)
+**Last updated:** 2026-09-17 (v2.5.2)
 
 ---
 
 ## 1. High-level overview
 
-MAC Address Converter is a single-process Windows tray application. It uses three Python modules and several auxiliary files. The runtime is PyQt5 + pynput + pystray. There is no client/server split, no IPC, and no network dependency other than the IEEE OUI CSV fetch.
+MAC Address Converter is a single-process Windows tray application. It uses three Python modules and several auxiliary files. The runtime is PyQt5 + pystray + ctypes calls into the Win32 API (hotkey, focus, mutex). There is no client/server split, no IPC, and no network dependency other than the IEEE OUI CSV fetch.
 
 ```
                   ┌────────────────────────────┐
@@ -18,8 +18,8 @@ MAC Address Converter is a single-process Windows tray application. It uses thre
                                │ user presses Alt+Shift+M
                                ▼
               ┌────────────────────────────────────┐
-              │   pynput GlobalHotKeys listener    │
-              │   (own thread, daemon)             │
+              │   GlobalHotkey thread (win_hotkey) │
+              │   RegisterHotKey → WM_HOTKEY loop  │
               └────────────────┬───────────────────┘
                                │ pyperclip.paste()
                                │ mac_formats.detect_mac()
@@ -44,7 +44,7 @@ MAC Address Converter is a single-process Windows tray application. It uses thre
               └────────────────────────────────────┘
 ```
 
-The producer (pynput thread) and the consumer (Qt main thread) never touch each other's widgets. They communicate through `queue.Queue` objects. This invariant is critical — violating it leads to crashes that are very hard to reproduce.
+The producer (hotkey thread) and the consumer (Qt main thread) never touch each other's widgets. They communicate through `queue.Queue` objects. This invariant is critical — violating it leads to crashes that are very hard to reproduce.
 
 ---
 
@@ -53,32 +53,34 @@ The producer (pynput thread) and the consumer (Qt main thread) never touch each 
 | File | Lines | Role |
 |------|-------|------|
 | `clipboard_hotkey.py` | ~1850 | Main application: tray icon, hotkey listener, settings I/O, all PyQt5 dialogs, queue plumbing, single-instance mutex, autostart shortcut management, OUI worker lifecycle. |
-| `mac_formats.py` | ~55 | Pure-logic MAC address detection and format conversion. No I/O, no Qt, no pynput. Importable in isolation. |
+| `mac_formats.py` | ~55 | Pure-logic MAC address detection and format conversion. No I/O, no Qt. Importable in isolation. |
+| `win_hotkey.py` | ~210 | Global hotkey via the Win32 `RegisterHotKey` API (ctypes). `parse_hotkey()` + `GlobalHotkey` thread owning the registration and its `GetMessageW` loop. No Qt. Added in v2.5.2, replacing pynput. |
+| `update_check.py` | ~130 | Startup update check against the GitHub Releases API. Holds `APP_VERSION`, the single source of truth for the version. No Qt. |
 | `oui_lookup.py` | ~270 | IEEE OUI database: download (urllib + atomic replace + content sniff), parse (csv), lookup (dict). Thread-safe. No Qt. |
 | `mac-converter.spec` | ~50 | PyInstaller build script. Hidden imports for pystray and pywin32, multi-size `.ico` icon, UPX disabled, console=False (windowed app). |
 | `installer.iss` | ~70 | Inno Setup installer script. `PrivilegesRequired=lowest` (no admin), fixed AppId GUID for upgrade tracking, removes settings on uninstall (with confirmation). |
-| `requirements.txt` | runtime deps | pystray, Pillow, pyperclip, pynput, PyQt5, pywin32, PyInstaller |
+| `requirements.txt` | runtime deps | pystray, Pillow, pyperclip, PyQt5, pywin32, truststore, PyInstaller |
 | `requirements-dev.txt` | dev deps | pytest |
 | `pytest.ini` | test config | testpaths=tests, addopts=-ra --tb=short |
 | `tests/conftest.py` | test fixture | Puts worktree root on sys.path so tests can import mac_formats etc. |
-| `tests/test_*.py` | regression tests | 24 tests covering mac_formats regex, oui_lookup download/parse, settings atomic I/O and validation |
+| `tests/test_*.py` | regression tests | 66 tests covering mac_formats regex, oui_lookup download/parse, settings atomic I/O and validation |
 
 ### Why this split?
 
 - **`mac_formats.py` is pure** so it's trivially testable with no fixtures or mocks. The regex and the format functions are the kind of code that *must* be exhaustively tested because everything else assumes they're correct.
-- **`oui_lookup.py` is self-contained** — it doesn't import Qt or pynput. This means it can be reused in another tool or imported in a script without dragging the full PyQt5 dependency tree. It's also the only module that talks to the network.
-- **`clipboard_hotkey.py` carries the integration concerns** — Qt, pynput, pystray, pywin32, settings I/O. It's large (~1850 lines) but it has a single responsibility: be the app. Splitting it further was considered during the Phase 2 audit and left for future work; the file is monolithic because the dialogs share global state (queues, the `oui_db` instance, the `settings` dict, the `tray_icon` reference) and splitting them without introducing a coordinator class would just move the coupling around.
+- **`oui_lookup.py` is self-contained** — it doesn't import Qt. This means it can be reused in another tool or imported in a script without dragging the full PyQt5 dependency tree. It's also the only module that talks to the network.
+- **`clipboard_hotkey.py` carries the integration concerns** — Qt, pystray, pywin32, settings I/O (the Win32 hotkey plumbing itself lives in `win_hotkey.py`). It's large (~1850 lines) but it has a single responsibility: be the app. Splitting it further was considered during the Phase 2 audit and left for future work; the file is monolithic because the dialogs share global state (queues, the `oui_db` instance, the `settings` dict, the `tray_icon` reference) and splitting them without introducing a coordinator class would just move the coupling around.
 
 ---
 
 ## 3. Threading model
 
-Five threads are alive in steady state. Each is named here for clarity even though Python's `threading.Thread` doesn't enforce names.
+Three threads live for the whole process (Qt main, hotkey, tray); up to three short-lived workers run on demand. Each is named here for clarity even though Python's `threading.Thread` doesn't enforce names.
 
 | Thread | Owner | Lifetime | Touches |
 |--------|-------|----------|---------|
 | **Main thread (Qt event loop)** | `main()` | Process lifetime | All PyQt5 widgets, all QTimers, all `*_request_queue` consumers. The ONLY thread allowed to touch Qt objects. |
-| **pynput hotkey listener** | `listen_hotkey()` started in `tray_app()` | Process lifetime, joined on quit | Reads clipboard via `pyperclip`, calls `mac_formats.detect_mac` and `convert_mac`, writes clipboard, puts to `format_popup_request_queue`. Never touches Qt. |
+| **Hotkey thread** (`win_hotkey.GlobalHotkey`) | `listen_hotkey()` called from `main()` | Process lifetime; `stop()` posts `WM_QUIT`, unregisters, joins | Reads clipboard via `pyperclip`, calls `mac_formats.detect_mac` and `convert_mac`, writes clipboard, puts to `format_popup_request_queue`. Never touches Qt. |
 | **pystray tray icon** | `tray_app()` | Process lifetime, `icon.stop()` on quit | Renders the icon, handles right-click menu. Triggers menu actions which run on this thread; they `*_dialog_request_queue.put()` to hand off to the Qt main thread. |
 | **OUI auto-update worker** | spawned by the auto-update logic, optional, daemon | One-shot per startup or scheduled refresh | Calls `oui_lookup.download()` and `oui_lookup.load()`. Reports progress via `oui_download_progress_queue` or `oui_status_queue`. |
 | **OUI manual update worker** | `OUIDownloadDialog._start_download` | One-shot per "Update" button click | Same as above, scoped to a single dialog. Honors `cancel_event` on dialog close. |
@@ -93,7 +95,7 @@ Five threads are alive in steady state. Each is named here for clarity even thou
 
 ### Why not use `QThread`?
 
-The natural fit for a Qt-friendly worker would be `QThread`, but pynput's listener doesn't compose with `QThread` cleanly — pynput owns its own thread lifecycle, and trying to host its event loop inside `QThread.run()` adds complexity for no win. So we use a plain `threading.Thread` for the listener and a `queue.Queue` + `QTimer` to bridge.
+The hotkey thread runs a raw Win32 `GetMessageW` loop, and `RegisterHotKey(NULL, ...)` binds the hotkey to *the thread that registered it*. A plain `threading.Thread` that registers and pumps its own messages is the simplest correct shape; `QThread` would add nothing. Work is handed to Qt via `queue.Queue` + `QTimer`, same as every other worker. (Alternative considered: receive `WM_HOTKEY` on the Qt main thread through `QAbstractNativeEventFilter` — rejected because it ties hotkey delivery to the Qt event loop being responsive, which is exactly the coupling that caused the Synapse bug.)
 
 ---
 
@@ -102,8 +104,8 @@ The natural fit for a Qt-friendly worker would be `QThread`, but pynput's listen
 ### 4.1 Hotkey press → format popup
 
 1. User presses `Alt+Shift+M` (or their configured hotkey).
-2. `pynput.keyboard.GlobalHotKeys` running in `listen_hotkey()` matches the chord and calls `handle_hotkey(app)`.
-3. `handle_hotkey` runs **on the pynput listener thread**:
+2. Windows posts `WM_HOTKEY` to the `GlobalHotkey` thread (registered in `listen_hotkey()` via `RegisterHotKey`). Its `GetMessageW` loop calls `handle_hotkey(app)`. No keyboard hook is involved — Windows matched the chord itself.
+3. `handle_hotkey` runs **on the hotkey thread**:
    - `pyperclip.paste()` — wrapped in `try/except PyperclipException` (F6 fix). If clipboard is locked (e.g. Snipping Tool is mid-capture), an error message goes into `format_popup_request_queue` and the function returns. The listener thread does NOT die.
    - `mac_formats.detect_mac(text)` — returns the normalized 12-hex-char string, or `None`.
    - If `None`: puts an error request onto the queue and returns.
@@ -166,7 +168,7 @@ This section records the **rationale** for design choices that aren't obvious fr
 
 ### 6.1 No admin rights, ever
 
-The app uses **pynput** (not the `keyboard` package) for global hotkey registration. `pynput.keyboard.GlobalHotKeys` uses a `WH_KEYBOARD_LL` low-level Win32 hook installed via `SetWindowsHookEx`, which works without elevation. The older `keyboard` package required SeDebugPrivilege on Windows — which means admin rights — and was dropped in v2.1.0.
+The global hotkey is registered with the Win32 **`RegisterHotKey`** API (v2.5.2+), which needs no elevation and installs no hook. History: v2.0 used the `keyboard` package (needed admin rights, dropped in v2.1.0); v2.1.0–v2.5.1 used `pynput`, whose `WH_KEYBOARD_LL` hook also needs no admin but intercepts every keystroke — see § 6.11 for why that was replaced.
 
 `installer.iss` declares `PrivilegesRequired=lowest`. The installer installs into `{autopf}` (which expands to `%LOCALAPPDATA%\Programs\MAC-Converter` for unprivileged users), not `Program Files`. Autostart is via a Startup-folder shortcut in `%APPDATA%` (no registry, no admin).
 
@@ -190,7 +192,7 @@ The v2.4.2 fix layers three mechanisms:
 
 All `settings.json` writes go through `save_settings()`, which acquires `_settings_lock` (module-level `threading.Lock`) and calls `_atomic_write_json(path, data)`. The helper writes to `path.tmp` and calls `os.replace(tmp, path)`, which is atomic on Windows where the underlying filesystem supports it.
 
-Three threads write settings: the pynput hotkey listener (updates `last_format_index` on every hotkey press), the Qt main thread (Settings dialog Save handler), and the OUI auto-update worker (records `oui_last_downloaded` after successful download). Without the lock, these would interleave and produce a torn JSON file. Without atomic write, a power loss or kill -9 mid-write would corrupt the file. Both happened often enough in pre-v2.4.0 versions that the audit (F7, F16, F23, F28) wrapped them all together.
+Three threads write settings: the hotkey thread (updates `last_format_index` on every hotkey press), the Qt main thread (Settings dialog Save handler), and the OUI auto-update worker (records `oui_last_downloaded` after successful download). Without the lock, these would interleave and produce a torn JSON file. Without atomic write, a power loss or kill -9 mid-write would corrupt the file. Both happened often enough in pre-v2.4.0 versions that the audit (F7, F16, F23, F28) wrapped them all together.
 
 `load_settings()` is the mirror: if it can't parse `settings.json`, it renames the file to `settings.json.corrupt-<unix-ts>` (so the user can recover) and returns `DEFAULT_SETTINGS`. Without this, a single corrupt file silently lost every user preference forever.
 
@@ -269,11 +271,32 @@ The arguments against:
 
 **The current decision:** leave it monolithic. If future feature work makes the file unworkable, the right refactor is to introduce a small `AppContext` class that owns `settings`, `oui_db`, `tray_icon`, and the queues, then move each dialog into its own file with `AppContext` injected. Don't split without that scaffolding.
 
+### 6.11 RegisterHotKey instead of a low-level keyboard hook (v2.5.2)
+
+**Symptom that drove this:** Razer Synapse shortcuts and macros stopped working while MAC Converter ran, and recovered when it quit.
+
+**Cause:** v2.1.0–v2.5.1 implemented the hotkey with `pynput.keyboard.Listener`, a `WH_KEYBOARD_LL` hook. Windows calls every low-level hook in the chain, synchronously, for every keystroke on the machine — including keys injected by tools like Synapse. Our hook callback was Python code, so it could only run when the GIL was free. When the Qt thread or OUI parsing held the GIL, keystrokes waited behind Python. Windows' `LowLevelHooksTimeout` then skips or drops late hooks, and repeated timeouts make it silently remove them. Timed injected sequences (macros) are what breaks first.
+
+**Fix:** `win_hotkey.GlobalHotkey` calls `RegisterHotKey(NULL, id, modifiers | MOD_NOREPEAT, vk)` on a dedicated thread and pumps `GetMessageW`. Windows does the chord matching in the kernel/win32k and posts one `WM_HOTKEY` to that thread. Nothing else about the keyboard reaches our process.
+
+**Trade-offs, accepted deliberately:**
+- A chord already registered by another app is refused (`ERROR_HOTKEY_ALREADY_REGISTERED`, 1409). With a hook, both apps would have fired. We surface the conflict via a tray notification instead.
+- The hotkey must include a modifier. `parse_hotkey` enforces this: a bare key registered globally would be stolen from every application.
+- Keys are limited to a-z, 0-9, F1-F24 and a named set (space, enter, arrows…). Punctuation is excluded because virtual-key codes for it depend on the keyboard layout (Spanish vs Hebrew vs US), and the user switches layouts.
+
+**Implementation details that matter if you touch this code:**
+- `RegisterHotKey(NULL, …)` binds to the *calling thread's* message queue. Registration, the message loop and `UnregisterHotKey` must all happen on the same thread — that's why they all live in `GlobalHotkey.run()`.
+- `run()` calls `PeekMessageW(PM_NOREMOVE)` before anything else to force the thread's message queue into existence; otherwise `stop()`'s `PostThreadMessageW(WM_QUIT)` could race the queue creation and be lost.
+- The callback runs on the hotkey thread. It must not touch Qt widgets — `handle_hotkey` only reads/writes the clipboard and posts to queues.
+- The format popup still uses the `AttachThreadInput` focus grab (§ 6.2). `WM_HOTKEY` arrives on a non-Qt thread, so the Qt thread still hasn't "received the last input event" in Windows' eyes.
+
+**Don't reintroduce a keyboard hook** (pynput, `keyboard`, `SetWindowsHookEx`) for any feature without re-reading this section.
+
 ---
 
 ## 7. Build system
 
-PyInstaller (one-folder mode disabled — single-file exe) builds `dist/MAC-Converter.exe`. The spec file lists explicit `hiddenimports` for `pynput.keyboard._win32`, `pynput.mouse._win32`, `pystray._win32`, and the pywin32 modules used by autostart / single-instance (F33). UPX is disabled (F34) to reduce antivirus false positives — the resulting binary is ~30% larger but ships to many more endpoints without SmartScreen complaints.
+PyInstaller (one-folder mode disabled — single-file exe) builds `dist/MAC-Converter.exe`. The spec file lists explicit `hiddenimports` for `pystray._win32`, `truststore`, and the pywin32 modules used by autostart / single-instance (F33). UPX is disabled (F34) to reduce antivirus false positives — the resulting binary is ~30% larger but ships to many more endpoints without SmartScreen complaints.
 
 Inno Setup wraps `dist/MAC-Converter.exe` plus `icon-v1.png`, `README.md`, and `LICENSE.txt` into `installer-output/MAC-Converter-Setup-vX.Y.Z.exe`. The installer uses `PrivilegesRequired=lowest` and a fixed AppId GUID (`{{8F9A3B2C-1D4E-5F6A-7B8C-9D0E1F2A3B4C}`) so subsequent versions upgrade in place rather than installing alongside.
 
@@ -308,13 +331,15 @@ See [`SECURITY.md`](SECURITY.md) for the full threat model and disclosure policy
 - No clipboard data is persisted to disk beyond the immediate copy-back.
 - No telemetry, no analytics, no third-party servers other than IEEE.
 
-The pynput hotkey is the only Win32 hook the app installs. The pre-v2.4.0 format-popup Enter listener (a second, system-wide pynput keyboard listener) was removed in F19 — that's an important architectural property: **the only keyboard hook today catches a specific configurable chord, not every keystroke.**
+**The app installs no keyboard hooks (v2.5.2+).** The global hotkey is a `RegisterHotKey` registration: Windows matches the chord and sends one `WM_HOTKEY` message, so the app never sees any other keystroke.
+
+> **Correction (2026-09-17):** earlier versions of this document claimed the pynput hotkey "catches a specific configurable chord, not every keystroke." That was wrong. `pynput.keyboard.Listener` receives *every* keystroke system-wide and filters in Python. The v2.4.0 F19 fix removed a *second* such listener (the format popup's Enter key) but the main hotkey listener remained a full low-level hook until v2.5.2. See § 6.11.
 
 ---
 
 ## 10. Known limitations and tradeoffs
 
-- **Windows-only in practice.** macOS and Linux paths exist (pynput works on those platforms) but the autostart shortcut, single-instance mutex, and `SetForegroundWindow` calls are all Win32-specific. Cross-platform support would require platform-detection in `set_autostart_enabled`, `acquire_single_instance_mutex`, and `show_format_popup`'s focus grab.
+- **Windows-only in practice.** The global hotkey (`RegisterHotKey`), autostart shortcut, single-instance mutex, and `SetForegroundWindow` calls are all Win32-specific; the app does not run on macOS or Linux. Cross-platform support would require platform-detection in `set_autostart_enabled`, `acquire_single_instance_mutex`, and `show_format_popup`'s focus grab.
 - **No code signing.** The exe and installer are unsigned. Windows SmartScreen may warn on first run. UPX is disabled to reduce false positives but signing is the proper fix; it's out of scope for this open-source project.
 - **OUI lookup is best-effort.** The IEEE database doesn't include every vendor (MA-S and MA-M smaller allocations aren't in `oui.csv`), and some MAC prefixes are reserved or private. Lookups for those return `None` and the vendor popup shows "Unknown vendor".
 - **No batch processing.** One MAC per hotkey press. Batch conversion is on the v2.5.0+ roadmap.
@@ -337,7 +362,8 @@ The pynput hotkey is the only Win32 hook the app installs. The pre-v2.4.0 format
 
 | Symptom | Start here |
 |---------|------------|
-| Hotkey not firing | `listen_hotkey()` in `clipboard_hotkey.py`; check `settings['hotkey']`; verify pynput is installed and not blocked by AV. See [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md). |
+| Hotkey not firing | `listen_hotkey()` in `clipboard_hotkey.py` and `win_hotkey.py`. Most common cause: another app already owns the chord — `GlobalHotkey.error` says "already in use" and a tray notification is shown at startup. Check `settings['hotkey']` parses with `win_hotkey.parse_hotkey`. |
+| Other apps' shortcuts/macros break while the app runs (Razer Synapse etc.) | Should be impossible since v2.5.2 — the app installs no keyboard hook. If it recurs, check nothing re-introduced `pynput.keyboard.Listener`, `SetWindowsHookEx`, or another hook library. See § 6.11. See [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md). |
 | Format popup appears but Enter does nothing | The focus saga. See §6.2 above and CHANGELOG `[2.4.2]`. Check whether `Qt.StrongFocus` is still set, whether `AttachThreadInput` is being called, whether `QShortcut` context is still `Qt.ApplicationShortcut`. |
 | Settings keep resetting | Check whether `_atomic_write_json` is being used; check `_settings_lock`; see if `settings.json.corrupt-*` files appear in `%APPDATA%\mac-converter-2\` (indicates JSON corruption). |
 | OUI lookup returns no vendor | Either the database isn't loaded (`oui_db.is_loaded` is False — try the Update button in Settings) or the prefix isn't in IEEE's MA-L list. Confirm by opening `oui.csv` and grepping for the prefix. |

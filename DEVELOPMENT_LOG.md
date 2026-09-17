@@ -490,11 +490,8 @@ Already shipped in v2.5.0 — no work needed. The user's request was a reminder,
 
 ### Commits this session
 
-1. `<sha1>` — `feat: detect space-separated MACs + add 4-4-4 dash conversion outputs`
-2. `<sha2>` — `fix: clean up legacy 'MAC Address Converter.lnk' to stop double-launch at boot`
-3. `<sha3>` — `release: bump version to 2.5.1 + doc sweep + installer [InstallDelete]`
-
-(SHAs filled in below as commits land — this entry is written in advance of the actual commits.)
+1. `f9a3d2a` — `feat: expand format support (12 total) + fix double-launch at Windows startup`
+2. `9c98d3e` — `release: bump version to 2.5.1 + doc sweep + installer [InstallDelete]`
 
 ### Test status
 
@@ -505,3 +502,40 @@ Already shipped in v2.5.0 — no work needed. The user's request was a reminder,
 - **Filename renames during an autostart implementation switch require legacy cleanup.** The F31 fix in v2.4.0 changed the autostart filename from `MAC Address Converter.lnk` to `MAC-Converter.lnk` without a migration step for the old filename. Should have been caught at the time. Future canonical-filename changes need an `[InstallDelete]` + runtime sweep on day one — this is now the documented pattern (ARCHITECTURE.md § 6.7).
 - **A user's vague bug report theory ("it installs a second launch") was close enough to be useful.** Took the symptom seriously and traced backwards to find the actual filename mismatch. The user-supplied theory rules out alternative causes (a stray `Run` registry entry, a misbehaving Inno Setup script) faster than starting from zero.
 - **Smoke-testing helpers on the dev machine catches real-world state.** Calling `_cleanup_legacy_autostart_shortcuts()` once during T2 development surfaced an actual legacy shortcut on the user's machine — confirming the diagnosis before shipping.
+
+---
+
+## 2026-09-17 — v2.5.2: RegisterHotKey replaces the pynput keyboard hook
+
+### Report
+
+Razer Synapse shortcuts and macros stopped working while MAC Converter was running. Quitting the app from the tray restored them (confirmed by the user) — which pointed straight at something the app installs system-wide.
+
+### Diagnosis
+
+`listen_hotkey()` used `pynput.keyboard.Listener`, i.e. a `WH_KEYBOARD_LL` low-level keyboard hook. Windows calls every hook in the chain synchronously for every keystroke on the machine, including keys injected by Synapse. Our callback was Python, so it only ran when the GIL was free; busy moments (Qt, OUI parsing) made keystrokes wait. Windows' hook timeout then skips late hooks, and timed injected sequences (macros) break first.
+
+This also exposed a wrong statement in ARCHITECTURE.md and SECURITY.md (written 2026-05-15): they said the pynput hotkey "catches a specific chord, not every keystroke." The v2.4.0 F19 fix removed a *second* listener (the popup's Enter key), but the main hotkey listener was always a full hook. Both documents now carry an explicit correction.
+
+### Fix
+
+- New `win_hotkey.py`: `parse_hotkey()` and `GlobalHotkey`, a thread that calls `RegisterHotKey(NULL, 1, mods | MOD_NOREPEAT, vk)`, pumps `GetMessageW`, and calls `UnregisterHotKey` on exit. `PeekMessageW(PM_NOREMOVE)` first so the message queue exists before `stop()` can post `WM_QUIT`.
+- `listen_hotkey()` uses it; invalid saved hotkey falls back to `alt+shift+m`; a chord already owned by another app (`ERROR_HOTKEY_ALREADY_REGISTERED`) now produces a tray notification.
+- Settings validation shares the parser. New rule: at least one modifier. Punctuation keys unsupported (layout-dependent VK codes; user switches ES/HE/EN layouts).
+- `pynput` removed from requirements.txt, the PyInstaller spec and LICENSE.txt. LICENSE also still listed `keyboard` (gone since v2.4.0) and lacked `truststore` — fixed.
+- ARCHITECTURE § 6.11 documents the decision, the trade-offs and the thread-affinity rules for anyone touching it later.
+
+### Verification
+
+- 24 new tests in `tests/test_win_hotkey.py`: parser cases, real registration, already-in-use, re-register after stop, and an injected Ctrl+Alt+Shift+F23 keypress reaching the callback. 66/66 green.
+- End to end: launched `clipboard_hotkey.py` from source against a throwaway `%APPDATA%`, injected the hotkey, clipboard converted `00-1A-2B-3C-4D-5E` → `00:1a:2b:3c:4d:5e`. Repeated with `pynput` uninstalled from the venv: still PASS.
+- Not verified by me: Razer Synapse itself (not scriptable from here). The user should confirm Synapse bindings keep working with v2.5.2 running.
+
+### Housekeeping noticed, not done
+
+`C:\working\mac-converter-2` main checkout sits on a detached HEAD; stale worktree/branches and a duplicate `.venv` exist. Proposed a cleanup; user redirected to this bug first. Still pending their decision.
+
+### Lessons
+
+- A "harmless" global hook is never harmless: it taxes every keystroke on the machine. Prefer the OS's purpose-built API (`RegisterHotKey`) over interception.
+- Write down what a component *actually* receives, not what it acts on. The earlier docs conflated the two.

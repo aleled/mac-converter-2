@@ -4,7 +4,8 @@
 
 | Version | Supported |
 |---------|-----------|
-| 2.4.x   | ✅        |
+| 2.5.x   | ✅        |
+| 2.4.x   | ❌ — please upgrade to 2.5.2 (removes the low-level keyboard hook) |
 | 2.3.x   | ❌ — please upgrade to 2.4.0 (closes 5 high-severity findings) |
 | < 2.3   | ❌        |
 
@@ -29,6 +30,8 @@ A full audit of the codebase was performed on 2026-05-14 covering all source, bu
 - Error messages no longer leak filesystem paths containing the Windows username (F12).
 - Single-instance Win32 mutex prevents double-launch races (F25).
 
+Follow-up in v2.5.2: the main global hotkey, still a `pynput` low-level keyboard hook after F19, was replaced with the Win32 `RegisterHotKey` API. The app no longer installs any keyboard hook.
+
 ## Threat model
 
 The app:
@@ -40,10 +43,11 @@ The app:
 
 The app does NOT:
 - Persist clipboard contents to disk beyond the immediate conversion.
-- Log keystrokes (the global hotkey is registered through `pynput.keyboard.GlobalHotKeys`, which only fires on the configured combination, not arbitrary keys).
+- See or log keystrokes. Since v2.5.2 the global hotkey is registered with Windows' `RegisterHotKey` API, so Windows matches the chord and the app receives a single notification — no keyboard hook, no access to any other keystroke.
+  - *Correction:* v2.1.0–v2.5.1 used `pynput.keyboard.Listener`, a low-level keyboard hook that received every keystroke system-wide (it only acted on the configured chord, but it did see all keys). Earlier versions of this file described it as only firing on the chord, which understated its access. No keystrokes were ever logged or stored.
 - Connect to any third-party server other than IEEE for the OUI database.
 
 ## Out of scope
 
 - **Unsigned binary on Windows.** The released `.exe` is not code-signed. SmartScreen and some AV products may flag it on first run. UPX has been disabled in v2.4.0 to reduce false positives, but signing is out of scope for this open-source project. Verify the SHA-256 of the installer against the GitHub Release assets page if you want extra assurance.
-- **Source-code supply chain audits of dependencies** (PyQt5, pynput, pystray, pyperclip, Pillow, pywin32). These are widely-used PyPI packages; consult their own security policies for vulnerability information.
+- **Source-code supply chain audits of dependencies** (PyQt5, pystray, pyperclip, Pillow, pywin32, truststore). These are widely-used PyPI packages; consult their own security policies for vulnerability information.

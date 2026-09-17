@@ -35,7 +35,7 @@ The venv helper scripts `env_load.ps1` (PowerShell) and `env_load.sh` (bash) act
 
 1. Fork the repo, or create a branch off `dev`.
 2. Make changes in small, atomic commits.
-3. Run the regression suite (`python -m pytest`). All 24 tests should stay green.
+3. Run the regression suite (`python -m pytest`). All 66 tests should stay green. (`tests/test_win_hotkey.py` registers real hotkeys and injects a keypress, so run it on Windows.)
 4. If your change affects pure logic in `mac_formats.py`, `oui_lookup.py`, or settings I/O, **add a regression test** in `tests/`.
 5. If your change is user-visible, update `CHANGELOG.md` under a new `[Unreleased]` section.
 6. Open a PR against `dev`. Reference any related audit finding IDs (e.g. `Closes F<N>`) if applicable.
@@ -50,7 +50,7 @@ These are constraints inherited from the design — please respect them:
 - **Atomic file writes.** Anything that mutates a persistent file should use the temp-file + `os.replace` pattern. See `_atomic_write_json` in `clipboard_hotkey.py`.
 - **Thread-safe.** Producer-consumer flow between worker threads and Qt main thread should go through `queue.Queue` polled by `QTimer`. Don't touch Qt widgets from worker threads.
 - **No bare `except:`.** Use `except Exception:` or a more specific type — bare excepts swallow `KeyboardInterrupt` and `SystemExit`.
-- **No global keyboard hooks** beyond the configurable application hotkey. Per-popup keyboard handling uses Qt's `QShortcut` / `keyPressEvent`, not `pynput.keyboard.Listener`.
+- **No keyboard hooks, at all.** The global hotkey uses Win32 `RegisterHotKey` (`win_hotkey.py`). Per-popup keyboard handling uses Qt's `QShortcut` / `keyPressEvent`. Don't add `pynput`, `keyboard`, or `SetWindowsHookEx` — a low-level hook broke Razer Synapse until v2.5.2 (ARCHITECTURE.md § 6.11).
 - **Single source of truth for autostart.** Don't add a competing mechanism (e.g. registry write) alongside the existing Startup-folder shortcut.
 
 ## Testing guidance
