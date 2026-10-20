@@ -2,7 +2,7 @@
 
 A lightweight Windows system tray utility for converting MAC addresses between different formats with a global hotkey, auto-cycling format selection, and clipboard integration.
 
-**Current Version:** 2.6.0
+**Current Version:** 2.7.0
 **Status:** Production-ready ✅
 **License:** MIT
 **Author:** Alejandro Lichtenfeld
@@ -12,12 +12,24 @@ A lightweight Windows system tray utility for converting MAC addresses between d
 **[https://aleled.github.io/mac-converter-2/](https://aleled.github.io/mac-converter-2/)** — one-click installer for Windows. The download portal auto-points at the latest release.
 
 Direct links to the latest version:
-- **[MAC-Converter-Setup-v2.6.0.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.6.0/MAC-Converter-Setup-v2.6.0.exe)** — Windows installer (~54 MB)
-- **[MAC-Converter.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.6.0/MAC-Converter.exe)** — Standalone executable (~51 MB)
+- **[MAC-Converter-Setup-v2.7.0.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.7.0/MAC-Converter-Setup-v2.7.0.exe)** — Windows installer (~54 MB)
+- **[MAC-Converter.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.7.0/MAC-Converter.exe)** — Standalone executable (~51 MB)
 
 ---
 
 ## What's new
+
+### 2.7.0 (2026-10-21) — Converting back actually works, and see how the shortcuts work
+
+**Pressing the hotkey again now converts the text back.** v2.6.0 said it did; it couldn't. Pasting the converted text left the caret at the end with nothing selected, so the second press found no selection and gave up. The replacement now leaves its own text selected, so you can press again — and again — and the text flips between the two readings.
+
+**Help → How the shortcuts work** plays a small looping animation for each shortcut: the text, the selection, the keypress, the result. First launch shows a short tutorial of the same thing. They are drawn by the app, so nothing was added to the download size.
+
+Also fixed, all in the code that neutralises the modifier keys you are still holding when the hotkey fires:
+
+- **Holding the hotkey down could overwrite your selection with repeated characters.** Windows keeps repeating the held key, and those repeats are swallowed only while the hotkey chord still matches. Releasing the modifiers broke the chord and let them through as text. It now waits for you to let go, and gives up rather than forcing anything if a key is still down.
+- **It could hand focus to the other application's menu bar**, because releasing Alt on its own is exactly how Windows opens a menu. Alt and the Win keys are now released while Ctrl is still down.
+- **Your clipboard could be overwritten with no way to put it back**, if another program happened to be holding the clipboard at that moment. It now stops instead of clobbering it.
 
 ### 2.6.0 (2026-10-20) — Fix text typed with the wrong keyboard layout
 
@@ -574,6 +586,7 @@ Fixed in **v2.5.2**. Older versions installed a low-level keyboard hook that cou
 
 ## Version History
 
+- **2.7.0** (2026-10-21): Pressing the layout hotkey again converts back (it never did). Animated per-shortcut demos under Help, plus a first-launch tutorial. Four fixes in the modifier-handling path, including one that could overwrite the selection with repeated characters when the hotkey was held down.
 - **2.6.0** (2026-10-20): Fix text typed with the wrong keyboard layout — select it, press Ctrl+Alt+L, get what you meant. Auto-detects direction, cycles with repeated presses, preserves the clipboard.
 - **2.5.2** (2026-09-17): Global hotkey moved from a pynput low-level keyboard hook to Windows' `RegisterHotKey` — fixes Razer Synapse shortcuts/macros breaking while the app runs; notification when the chosen hotkey is already taken; pynput dependency removed.
 - **2.5.1** (2026-05-22): Format expansion (12 formats now; new 4-4-4 dash variant; space-separated detection) + fixed double-launch at Windows startup caused by legacy installer shortcut.

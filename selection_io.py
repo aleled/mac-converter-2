@@ -59,17 +59,37 @@ if sys.platform == "win32":
     VK_LCONTROL, VK_RCONTROL = 0xA2, 0xA3
     VK_LMENU, VK_RMENU = 0xA4, 0xA5
     VK_C, VK_V = 0x43, 0x56
+    VK_LEFT = 0x25
 
     # Every modifier that could be held down by a hotkey chord. We release the
     # side-specific keys: releasing only VK_CONTROL leaves VK_LCONTROL down.
-    _HELD_MODIFIERS = (VK_LCONTROL, VK_RCONTROL, VK_LMENU, VK_RMENU,
-                       VK_LSHIFT, VK_RSHIFT, VK_LWIN, VK_RWIN)
+    # Release order matters. Only the chord's FINAL key is consumed by
+    # RegisterHotKey -- the Ctrl/Alt key-downs already reached the focused
+    # window as ordinary key messages. So if Alt goes up alone, that is the
+    # canonical "tap Alt" gesture and DefWindowProc turns it into
+    # WM_SYSCOMMAND/SC_KEYMENU: the target's menu bar takes focus and the
+    # user's next keystrokes go there instead of into their document. A lone
+    # Win key-up opens the Start menu for the same reason. Releasing them
+    # while a Ctrl is still down keeps them as plain key-ups.
+    _HELD_MODIFIERS = (VK_LWIN, VK_RWIN,
+                       VK_LMENU, VK_RMENU,
+                       VK_LSHIFT, VK_RSHIFT,
+                       VK_LCONTROL, VK_RCONTROL)
     _MODIFIER_PROBES = (VK_CONTROL, VK_MENU, VK_SHIFT, VK_LWIN, VK_RWIN)
+    # Everything that counts as a modifier, for 'is a real key still down?'
+    _MODIFIER_VKS = frozenset(_HELD_MODIFIERS + _MODIFIER_PROBES)
 
     INPUT_KEYBOARD = 1
+    KEYEVENTF_EXTENDEDKEY = 0x0001
     KEYEVENTF_KEYUP = 0x0002
     KEYEVENTF_SCANCODE = 0x0008
     MAPVK_VK_TO_VSC = 0
+
+    # E0-prefixed keys. Without this flag the target is told a DIFFERENT key
+    # went up than the one that is down (MapVirtualKeyW returns the same scan
+    # code for both sides: 0x1D for either Ctrl, 0x38 for either Alt), so the
+    # modifier stays stuck in that application's view of the world.
+    _EXTENDED_KEYS = frozenset((VK_RCONTROL, VK_RMENU, VK_LWIN, VK_RWIN, VK_LEFT))
 
     class _MOUSEINPUT(ctypes.Structure):
         _fields_ = [("dx", wintypes.LONG), ("dy", wintypes.LONG),
@@ -115,6 +135,7 @@ CLIPBOARD_SETTLE_MS = 30             # after forcing modifiers up, before sendin
 CLIPBOARD_POLL_MS = 10               # how often to check for a clipboard change
 PASTE_SETTLE_MS = 150                # before restoring the clipboard after paste
 CLIPBOARD_RETRY_MS = 300             # total time to keep retrying a locked clipboard
+RESELECT_MAX_CHARS = 2000            # above this we skip re-selecting after a paste
 
 
 def _modifiers_down():
@@ -135,7 +156,8 @@ def _send_keys(events):
         arr[i].ki = _KEYBDINPUT(
             wVk=vk,
             wScan=_u32.MapVirtualKeyW(vk, MAPVK_VK_TO_VSC),
-            dwFlags=KEYEVENTF_KEYUP if up else 0,
+            dwFlags=((KEYEVENTF_KEYUP if up else 0)
+                     | (KEYEVENTF_EXTENDEDKEY if vk in _EXTENDED_KEYS else 0)),
             time=0,
             dwExtraInfo=None,
         )
@@ -143,20 +165,50 @@ def _send_keys(events):
     return sent == len(events)
 
 
-def _settle_modifiers():
-    """Wait for the hotkey's modifiers to be released, then force up any stragglers.
+def _non_modifier_held():
+    """True if any non-modifier key is physically down right now.
 
-    Returns True if the keyboard is clean. See the module docstring for why this
-    matters more than anything else here.
+    Mouse buttons are skipped: holding one is not a reason to refuse.
+    """
+    for vk in range(0x08, 0xFF):
+        if vk in _MODIFIER_VKS:
+            continue
+        if _u32.GetAsyncKeyState(vk) & 0x8000:
+            return True
+    return False
+
+
+def _settle_modifiers():
+    """Wait for the hotkey's keys to be released. True if the keyboard is clean.
+
+    A deliberate press-and-release is 60-150 ms from key-down to all-keys-up, so
+    in almost every real press the user's own key-up clears the state and we
+    inject nothing at all. That is by far the safest path, so we wait first.
+
+    If the wait expires, WHY the keyboard is still busy decides what we do:
+
+    - Only modifiers are down (a sticky or remapped key): force them up, in
+      _HELD_MODIFIERS order so no lone Alt/Win release opens a menu.
+
+    - A non-modifier is ALSO down, i.e. the user is leaning on the hotkey. We
+      must NOT force the modifiers up. Typematic repeat is still generating
+      key-downs for that key (~31/s); win32k swallows them only because the
+      chord keeps matching a registered hotkey -- MOD_NOREPEAT suppresses the
+      duplicate WM_HOTKEY notifications, not the key repeat itself. Break the
+      chord by releasing Ctrl and Alt and those repeats get delivered to the
+      foreground window as an ordinary character, which REPLACES the selection
+      we were about to convert. Aborting costs the user one keypress; forcing
+      it through corrupts their text.
     """
     deadline = time.monotonic() + MODIFIER_RELEASE_TIMEOUT_MS / 1000.0
     while time.monotonic() < deadline:
-        if not _modifiers_down():
+        if not _modifiers_down() and not _non_modifier_held():
             return True
         time.sleep(CLIPBOARD_POLL_MS / 1000.0)
 
-    # The user is holding the key down (or a sticky/remapped key is stuck).
-    # Force every modifier up so our synthetic Ctrl+C isn't contaminated.
+    if _non_modifier_held():
+        return False
+
     _send_keys([(vk, True) for vk in _HELD_MODIFIERS])
     time.sleep(CLIPBOARD_SETTLE_MS / 1000.0)
     return not _modifiers_down()
@@ -289,7 +341,12 @@ def read_selection(timeout_ms=600):
         if not _settle_modifiers():
             return None
 
-        saved = _snapshot_clipboard()           # may be None if clipboard is locked
+        # Fail closed. If we cannot snapshot the clipboard we must not
+        # overwrite it -- the user may have something irreplaceable on there
+        # and we would have no way to put it back.
+        saved = _snapshot_clipboard()
+        if saved is None:
+            return None
         before = _u32.GetClipboardSequenceNumber()
 
         if not _ctrl_chord(VK_C):
@@ -311,12 +368,41 @@ def read_selection(timeout_ms=600):
         return None
 
 
-def replace_selection(text):
+def _caret_length(text):
+    """Caret positions `text` occupies once pasted.
+
+    A CRLF pair is a single line break, so it costs one Left press, not two.
+    Lone CR and lone LF already cost one each.
+    """
+    return len(text) - text.count("\r\n")
+
+
+def _reselect_left(count):
+    """Select `count` characters backwards from the caret with Shift+Left.
+
+    Sent as one SendInput batch so no other input can interleave and leave
+    Shift stuck down.
+    """
+    if count <= 0:
+        return True
+    events = [(VK_SHIFT, False)]
+    for _ in range(count):
+        events.append((VK_LEFT, False))
+        events.append((VK_LEFT, True))
+    events.append((VK_SHIFT, True))
+    return _send_keys(events)
+
+
+def replace_selection(text, reselect=True):
     """Replace the foreground window's selection with `text`. True if sent.
 
     True means the paste keystroke was delivered and the clipboard restored; it
     cannot guarantee the target app honoured it (nothing can, short of reading
     the app's state back).
+
+    With reselect=True (the default) the pasted text is left selected, so the
+    caller can act on it again — that is what makes converting the text back
+    possible. Selections longer than RESELECT_MAX_CHARS are left unselected.
     """
     if _u32 is None or text is None:
         return False
@@ -325,7 +411,10 @@ def replace_selection(text):
             return False
 
         saved = _snapshot_clipboard()
+        if saved is None:
+            return False          # see read_selection: never clobber unsaved
         if not _set_clipboard_text(text):
+            _restore_clipboard(saved)
             return False
         if not _ctrl_chord(VK_V):
             _restore_clipboard(saved)
@@ -335,6 +424,14 @@ def replace_selection(text):
         # would race its paste and could paste the OLD clipboard contents.
         time.sleep(PASTE_SETTLE_MS / 1000.0)
         _restore_clipboard(saved)
+
+        # Leave the pasted text selected. Without this the caret sits at the end
+        # with nothing selected, so pressing the hotkey again reads an empty
+        # selection and the user cannot convert the text back.
+        if reselect:
+            n = _caret_length(text)
+            if n <= RESELECT_MAX_CHARS:
+                _reselect_left(n)
         return True
     except Exception as e:
         print(f"[selection_io] replace_selection: {type(e).__name__}: {e}", file=sys.stderr)

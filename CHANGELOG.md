@@ -5,9 +5,29 @@
 
 # Changelog
 
+## [2.7.0] - 2026-10-20
+### Fixed
+- **Converting the text back didn't work at all.** v2.6.0 advertised that a second press would convert the text back, and it could not: `replace_selection()` pasted the new text and left the caret at the end with *nothing selected*, so the next press read an empty selection and reported "nothing selected". The pasted text is now left selected — `Shift+Left` over its caret length, as one atomic `SendInput` batch — so pressing the hotkey again acts on it. With two layouts installed that reverses the conversion, and the round trip is stable over repeated presses.
+  - The v2.6.0 end-to-end test only passed this case because the harness re-selected with `Ctrl+A` between presses. It was testing the harness, not the app.
+  - A CRLF pair is a single caret position, so multi-line selections re-select correctly.
+  - Selections over 2000 characters are pasted without re-selecting rather than issuing thousands of arrow presses.
+- **Even with a selection, a second press could return the same text.** The repeat branch re-derived from the original text with an incremented `skip`, but with two layouts there is only one candidate, so it wrapped straight back to the same answer and the hotkey looked dead. With a single candidate it now converts what is on screen; it only walks candidates when there are genuinely several.
+- **Releasing the modifiers could hand focus to the target application's menu bar.** The forced release put `Ctrl` up before `Alt`, so `Alt` went up alone — the canonical "tap Alt" gesture, which `DefWindowProc` turns into `WM_SYSCOMMAND` / `SC_KEYMENU`. Alt and the Win keys are now released *first*, while a `Ctrl` is still down, which keeps them ordinary key-ups.
+- **Holding the hotkey down could replace the selection with a row of repeated characters.** `MOD_NOREPEAT` suppresses duplicate `WM_HOTKEY` notifications but not the key's typematic repeat, and win32k swallows those repeats only while the chord still matches a registered hotkey. Forcing the modifiers up broke the chord, so the pending repeats were delivered to the foreground window as ordinary text — overwriting the very selection that was about to be converted. If a non-modifier key is still held when the grace period expires, the operation now aborts instead of forcing anything up.
+- **Right Ctrl, right Alt, both Win keys and Left arrow were injected without `KEYEVENTF_EXTENDEDKEY`.** `MapVirtualKeyW` returns the same scan code for both sides of Ctrl and Alt, so without the E0 flag the target was told a *different* key went up than the one that was down, and the modifier could stay stuck in that application's view of the keyboard.
+- **A clipboard that could not be saved was overwritten regardless.** `_snapshot_clipboard()` returns `None` when the clipboard cannot be opened because another process holds it; both callers carried on and clobbered it with no way to put it back. Both now abort before touching it, and a failed write restores the snapshot.
+
+### Changed
+- `replace_selection(text, reselect=True)` takes a new second parameter.
+- The tray notification after a conversion now ends with "(press again to change it back)" when there is a single candidate, instead of saying nothing.
+
+### Tests
+- 121 total, up from 93. New `tests/test_selection_io.py` covers caret arithmetic, the Shift+Left batch, the re-selection cap, fail-closed clipboard handling, modifier release ordering and the non-modifier abort.
+- The end-to-end harness now exercises the real round trip with **no** manual re-selection between presses, including multi-line text and mixed digits.
+
 ## [2.6.0] - 2026-10-20
 ### Added
-- **Fix text typed with the wrong keyboard layout.** Select mistyped text in any application and press the new hotkey (default `Ctrl+Alt+L`): the selection is reinterpreted under another installed keyboard layout and replaced in place. Typing `akuo` when you meant Hebrew gives `שלום`; it works in both directions, and pressing again converts back.
+- **Fix text typed with the wrong keyboard layout.** Select mistyped text in any application and press the new hotkey (default `Ctrl+Alt+L`): the selection is reinterpreted under another installed keyboard layout and replaced in place. Typing `akuo` when you meant Hebrew gives `שלום`; it works in both directions. (The "pressing again converts back" part of this did not actually work -- see 2.7.0.)
   - Layouts are read from Windows at run time via `VkKeyScanExW` / `ToUnicodeEx`, so whatever layouts you have installed are supported with no hard-coded tables and no code change when you add one.
   - The direction is detected automatically — Hebrew characters cannot be produced by the US layout and vice versa — so one press normally suffices. With three or more layouts installed, pressing again cycles through the other candidates.
   - Selection-only by design: if nothing is selected it does nothing and says so. It never sends Ctrl+A, so it cannot rewrite a whole document you didn't highlight.

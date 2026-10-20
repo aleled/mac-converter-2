@@ -270,9 +270,12 @@ Other reasons it declines:
 - **You only have one keyboard layout installed.** There is nothing to convert to. Add one in Windows Settings → Time & language → Language & region.
 - **The selection is longer than 5000 characters.** Refused deliberately.
 - **The hotkey is already owned by another application.** Since v2.5.2 a tray notification tells you this at startup. Pick another in Settings → Fix wrong-keyboard-layout text.
+- **You are holding the hotkey down.** It waits for you to let go, and if a key is still down when the grace period ends it gives up rather than forcing the modifiers up. Forcing them would break the hotkey chord, and Windows would then deliver the held key's repeats into your document as text, overwriting the selection it was about to convert. Tap the hotkey rather than holding it.
 - **The target application is running as administrator.** Windows blocks input from our non-elevated process into an elevated window (UIPI), so the copy silently returns nothing. Nothing can work around this short of running the app elevated, which it never does by design.
 
-**It converted to the wrong language:** press it again. With two layouts that converts back; with three or more it cycles to the next candidate.
+**It converted to the wrong language:** press it again. With two layouts that converts back; with three or more it cycles to the next candidate. (In v2.6.0 pressing again did nothing at all — fixed in v2.7.0.)
+
+**You want to see it work before trusting it:** right-click the tray icon → **How the shortcuts work**. It plays a looping animation of each shortcut, including the second press converting back.
 
 **Punctuation came out wrong:** `/` and `` ` `` are not 1:1 between the US and Hebrew layouts and may not round-trip. Letters and digits always do.
 

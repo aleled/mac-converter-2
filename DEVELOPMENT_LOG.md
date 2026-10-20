@@ -614,10 +614,106 @@ synthetic Ctrl+A never selected anything. Isolating one step (selecting via Tk's
 own API) showed `read_selection` had been correct all along. Check the harness
 before believing a failure.
 
-### Not useful this time
+### The adversarial Workflow (verdict revised, see 2.7.0 below)
 
 An adversarial Workflow (3 independent designs of the capture/replace mechanism,
 9 critiques across distinct lenses, synthesis) was launched before implementation
-and was still running after the feature was built and verified; its first agent
-returned null. The empirical harness settled every question it was meant to
-answer. Build the thing and test it against reality when reality is available.
+and was still running after the feature was built, verified and released; one of
+its ten agents died on malformed JSON. At the time this looked like a pure loss:
+the empirical harness had settled every question it was meant to answer.
+
+That judgement was wrong. It finished 62 minutes and 1.44M tokens later and had
+found four real defects in the shipped code that no amount of harness testing
+would have surfaced, because they only appear in situations the harness cannot
+create (see 2.7.0). Build the thing and test it against reality -- but a design
+critique can still see failure modes your tests never reach.
+
+---
+
+## 2026-10-20 (later same day) — v2.7.0: the reverse actually works, and four injection bugs
+
+### The reported bug
+
+"I am missing the options to reverse deciphering and vice versa." v2.6.0's release
+notes promised that pressing the hotkey again converted the text back. It never
+could. `replace_selection()` sent Ctrl+V and stopped; every application leaves the
+caret at the end of a paste with nothing selected, so the second press read an
+empty selection and reported "nothing selected".
+
+The v2.6.0 end-to-end harness "proved" the round trip because it re-selected with
+Ctrl+A between presses. The lesson written up in the 2.6.0 entry -- *check the
+harness before believing a failure* -- has an inverse that cost a release:
+**check the harness before believing a pass.** A harness that is more capable
+than the real caller tests the harness.
+
+`FakeIO.replace_selection()` in the unit tests made the same mistake: it set
+`self.selection = text`, simulating a re-selection the real code did not perform.
+Two independent test layers agreed with each other and both were wrong about the
+world.
+
+Fix: re-select the pasted text with Shift+Left over its caret length, in one
+atomic SendInput batch. A CRLF pair is one caret position, which is what
+`_caret_length()` exists for.
+
+### A second bug hiding behind the first
+
+With the selection restored, pressing again still returned the same text. The
+repeat branch re-derived from the *original* with `skip + 1`, but with two layouts
+`candidate_count` is 1, so `skip` wrapped to the same candidate. Converting what
+is *on screen* is the correct move for a single candidate, because the conversion
+is its own inverse: en-US -> he-IL -> en-US returns the original. `skip` now only
+walks when there are genuinely several candidates.
+
+### What the design critique found that testing could not
+
+Four defects in the released v2.6.0, all in the modifier-settling path:
+
+1. **Lone Alt release opens the menu bar.** `_HELD_MODIFIERS` released Ctrl before
+   Alt. Only the chord's final key is consumed by RegisterHotKey -- the Ctrl and
+   Alt key-*downs* already reached the focused window -- so Alt going up alone is
+   the "tap Alt" gesture, which DefWindowProc turns into WM_SYSCOMMAND/SC_KEYMENU.
+   Alt and Win must be released while a Ctrl is still down.
+
+2. **Holding the hotkey replaces the selection with repeated characters.** This is
+   the dangerous one. MOD_NOREPEAT suppresses duplicate WM_HOTKEY notifications,
+   not the key's typematic repeat; win32k swallows the repeats only while the
+   chord still matches. Forcing the modifiers up breaks the chord, and the pending
+   repeats arrive at the foreground window as ordinary text -- overwriting the
+   selection that was about to be converted. Now: if a non-modifier key is still
+   held when the grace period expires, abort. One wasted keypress beats corrupting
+   a document.
+
+3. **Missing KEYEVENTF_EXTENDEDKEY on E0 keys.** MapVirtualKeyW returns the same
+   scan code for both sides of Ctrl and Alt, so without the flag the target is
+   told a different key went up than the one that is down, and the modifier stays
+   stuck in that application.
+
+4. **A clipboard that could not be snapshotted was overwritten anyway.**
+   `_snapshot_clipboard()` returns None when another process holds the clipboard.
+   Both callers proceeded and clobbered it with no way to restore.
+
+None of these are reachable from a harness that drives a cooperative Tk window
+with clean synthetic input. They need a real user leaning on a real key, or a
+clipboard contended by another process.
+
+### Added
+
+The Help menu now carries animated demonstrations of each shortcut, and first
+launch shows a short tutorial (`shortcut_demo.py`, pure QTimer animation -- no
+GIF or video assets, so the installer does not grow).
+
+### Tests
+
+121, up from 93. `tests/test_selection_io.py` is new and covers caret arithmetic,
+the Shift+Left batch, the re-selection cap, fail-closed clipboard handling, the
+release ordering invariant and the non-modifier abort. The e2e harness now runs
+the round trip with no manual re-selection at all.
+
+### Lessons
+
+- Check the harness before believing a **pass**, not just a failure. Ask what the
+  harness does that the real caller does not.
+- When two test layers agree, check whether they share an assumption rather than
+  treating the agreement as corroboration.
+- A slow adversarial design pass is not worthless just because it lands after the
+  feature ships. Read it when it arrives.

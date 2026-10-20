@@ -55,7 +55,8 @@ The producer (hotkey thread) and the consumer (Qt main thread) never touch each 
 | `clipboard_hotkey.py` | ~1850 | Main application: tray icon, hotkey listener, settings I/O, all PyQt5 dialogs, queue plumbing, single-instance mutex, autostart shortcut management, OUI worker lifecycle. |
 | `mac_formats.py` | ~55 | Pure-logic MAC address detection and format conversion. No I/O, no Qt. Importable in isolation. |
 | `layout_fix.py` | ~200 | Wrong-keyboard-layout conversion. Builds char↔key maps from Windows at run time (`VkKeyScanExW` / `ToUnicodeEx`) for every installed layout, detects which layout text was typed under, and ranks candidate conversions. No Qt, no I/O. |
-| `selection_io.py` | ~290 | Reads and replaces the selection in the foreground window (Ctrl+C / Ctrl+V via `SendInput`), neutralising held modifiers and preserving the clipboard. No Qt. |
+| `selection_io.py` | ~430 | Reads and replaces the selection in the foreground window (Ctrl+C / Ctrl+V via `SendInput`), neutralising held modifiers and preserving the clipboard. Leaves the pasted text selected so the caller can act on its own output. Aborts rather than forcing the modifiers up while a non-modifier key is still held. No Qt. |
+| `shortcut_demo.py` | ~575 | Looping animated demonstrations of each shortcut (tray menu) and the first-launch tutorial. Pure `QTimer` + `QPainter`, no image or video assets, so the installer doesn't grow. Imports no app modules, to stay clear of circular imports. |
 | `win_hotkey.py` | ~210 | Global hotkey via the Win32 `RegisterHotKey` API (ctypes). `parse_hotkey()` + `GlobalHotkey` thread owning the registration and its `GetMessageW` loop. No Qt. Added in v2.5.2, replacing pynput. |
 | `update_check.py` | ~130 | Startup update check against the GitHub Releases API. Holds `APP_VERSION`, the single source of truth for the version. No Qt. |
 | `oui_lookup.py` | ~270 | IEEE OUI database: download (urllib + atomic replace + content sniff), parse (csv), lookup (dict). Thread-safe. No Qt. |
@@ -376,6 +377,7 @@ See [`SECURITY.md`](SECURITY.md) for the full threat model and disclosure policy
 
 | Symptom | Start here |
 |---------|------------|
+| The layout hotkey does nothing while held down | `_settle_modifiers()` in `selection_io.py`. It deliberately aborts when a non-modifier key is still down: breaking the hotkey chord would let that key's typematic repeats through into the user's document. |
 | Hotkey not firing | `listen_hotkey()` in `clipboard_hotkey.py` and `win_hotkey.py`. Most common cause: another app already owns the chord — `GlobalHotkey.error` says "already in use" and a tray notification is shown at startup. Check `settings['hotkey']` parses with `win_hotkey.parse_hotkey`. |
 | Other apps' shortcuts/macros break while the app runs (Razer Synapse etc.) | Should be impossible since v2.5.2 — the app installs no keyboard hook. If it recurs, check nothing re-introduced `pynput.keyboard.Listener`, `SetWindowsHookEx`, or another hook library. See § 6.11. See [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md). |
 | Format popup appears but Enter does nothing | The focus saga. See §6.2 above and CHANGELOG `[2.4.2]`. Check whether `Qt.StrongFocus` is still set, whether `AttachThreadInput` is being called, whether `QShortcut` context is still `Qt.ApplicationShortcut`. |

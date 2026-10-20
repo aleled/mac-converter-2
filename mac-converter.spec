@@ -8,6 +8,10 @@ a = Analysis(
     binaries=[],
     datas=[('icon-v1.png', '.')],
     hiddenimports=[
+        # shortcut_demo is imported inside a try/except so a missing module
+        # degrades silently -- name it explicitly rather than relying on
+        # PyInstaller spotting a guarded import.
+        'shortcut_demo',
         'pystray._win32',
         'win32com.client',
         'win32event',

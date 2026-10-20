@@ -37,6 +37,12 @@ import time
 import win_hotkey
 import layout_fix
 import selection_io
+
+try:
+    import shortcut_demo
+except Exception as _demo_err:   # pragma: no cover - optional UI module
+    shortcut_demo = None
+    print(f"[WARN] shortcut demos unavailable: {_demo_err}", file=sys.stderr)
 import json
 
 # --- Atomic settings I/O (Phase 2 fix for F7, F16, F23, F28) ---
@@ -274,6 +280,7 @@ def on_quit(icon, item):
 about_dialog_request_queue = queue.Queue()
 settings_dialog_request_queue = queue.Queue()
 format_popup_request_queue = queue.Queue()  # Queue for format popup requests
+demo_dialog_request_queue = queue.Queue()   # Queue for the shortcut-demo dialog
 
 # Global icon reference for notifications
 tray_icon = None
@@ -292,11 +299,13 @@ LAYOUT_FIX_MAX_CHARS = 5000
 
 # Remembers our own last output so a repeated press cycles through the other
 # candidate layouts instead of converting our own conversion.
-_layout_fix_state = {'original': None, 'result': None, 'skip': 0}
+_layout_fix_state = {'original': None, 'result': None, 'skip': 0,
+                     'candidate_count': 0}
 
 
 def _reset_layout_fix_state():
-    _layout_fix_state.update(original=None, result=None, skip=0)
+    _layout_fix_state.update(original=None, result=None, skip=0,
+                             candidate_count=0)
 
 
 def _notify_tray(message, title="MAC Converter"):
@@ -335,8 +344,16 @@ def handle_layout_fix():
                      f"limit {LAYOUT_FIX_MAX_CHARS}).")
         return
 
-    # A press on our own previous output means "not that one, try the next".
-    if _layout_fix_state['result'] is not None and text == _layout_fix_state['result']:
+    # A press on our own previous output means "that wasn't what I meant".
+    #
+    # With several candidates (three or more layouts installed) we walk to the
+    # next one, keeping the original as the source. With a single candidate --
+    # the usual two-layout case -- walking would wrap straight back to the same
+    # answer, so we convert what is on screen instead. That reverses it, because
+    # converting en-US->he-IL and then he-IL->en-US returns the original text.
+    repeat = (_layout_fix_state['result'] is not None
+              and text == _layout_fix_state['result'])
+    if repeat and _layout_fix_state['candidate_count'] > 1:
         source = _layout_fix_state['original']
         skip = _layout_fix_state['skip'] + 1
     else:
@@ -357,12 +374,13 @@ def handle_layout_fix():
         _notify_tray("Couldn't replace the selection — the text was left unchanged.")
         return
 
-    _layout_fix_state.update(original=source, result=result.text, skip=skip)
+    _layout_fix_state.update(original=source, result=result.text, skip=skip,
+                             candidate_count=result.candidate_count)
     if result.candidate_count > 1:
         position = skip % result.candidate_count + 1
         more = f"  ({position}/{result.candidate_count}, press again to cycle)"
     else:
-        more = ""
+        more = "  (press again to change it back)"
     _notify_tray(f"{_ellipsis(source)}  →  {_ellipsis(result.text)}\n"
                  f"{result.src.name} → {result.dst.name}{more}")
 
@@ -756,6 +774,41 @@ def show_about_dialog():
     """Show About dialog in main Qt thread."""
     dlg = AboutDialog()
     dlg.exec_()
+
+
+def show_shortcut_demos():
+    """Show the animated shortcut demos. Main Qt thread only."""
+    if shortcut_demo is None:
+        _notify_tray("The shortcut demos are unavailable in this build.")
+        return
+    try:
+        shortcut_demo.show_demos(settings.get('hotkey', DEFAULT_HOTKEY),
+                                 settings.get('layout_fix_hotkey',
+                                              DEFAULT_LAYOUT_FIX_HOTKEY))
+    except Exception as e:
+        print(f"[WARN] shortcut demos failed: {type(e).__name__}: {e}",
+              file=sys.stderr)
+
+
+def show_first_launch_tutorial():
+    """Show the one-time tutorial, then remember that we have. Qt thread only.
+
+    The flag is written even if the dialog raises, so a display problem cannot
+    make the tutorial reappear on every single launch.
+    """
+    try:
+        if shortcut_demo is not None:
+            shortcut_demo.show_tutorial(settings.get('hotkey', DEFAULT_HOTKEY),
+                                        settings.get('layout_fix_hotkey',
+                                                     DEFAULT_LAYOUT_FIX_HOTKEY))
+    except Exception as e:
+        print(f"[WARN] tutorial failed: {type(e).__name__}: {e}", file=sys.stderr)
+    finally:
+        settings['tutorial_shown'] = True
+        try:
+            save_settings(settings)
+        except Exception as e:
+            print(f"[WARN] could not record tutorial_shown: {e}", file=sys.stderr)
 
 # --- OUI Database Viewer ---
 class OUIViewerDialog(QDialog):
@@ -2129,12 +2182,16 @@ def tray_app():
         def settings_callback(icon, item):
             settings_dialog_request_queue.put(True)
 
+        def demo_callback(icon, item):
+            demo_dialog_request_queue.put(True)
+
         tray_icon = pystray.Icon(
             "mac_converter",
             create_image(),
             "MAC Converter",
             menu=pystray.Menu(
                 pystray.MenuItem("Settings", settings_callback),
+                pystray.MenuItem("How the shortcuts work", demo_callback),
                 pystray.MenuItem("About", about_callback),
                 pystray.MenuItem("Quit", on_quit)
             )
@@ -2228,6 +2285,7 @@ DEFAULT_SETTINGS = {
     'last_format_index': 0,              # Track last used format (0-9)
     'hotkey': 'alt+shift+m',             # Configurable hotkey
     'layout_fix_hotkey': 'ctrl+alt+l',   # Fix text typed in the wrong keyboard layout
+    'tutorial_shown': False,             # First-launch tutorial already seen
     'notification_duration': 3,          # Notification display seconds
     'author': 'Alejandro Lichtenfeld',   # Correct author name
     'license': 'MIT',
@@ -2266,6 +2324,10 @@ def _validate_settings(d):
     # autostart: strict bool
     if isinstance(d.get("autostart"), bool):
         out["autostart"] = d["autostart"]
+
+    # tutorial_shown: strict bool
+    if isinstance(d.get("tutorial_shown"), bool):
+        out["tutorial_shown"] = d["tutorial_shown"]
 
     # last_format_index: int in [0, 11]  (12 formats since v2.5.1)
     lfi = d.get("last_format_index")
@@ -2420,6 +2482,11 @@ def main():
     # thread; results are picked up by _update_timer below.
     QTimer.singleShot(2000, _start_update_check)
 
+    # v2.7.0: first launch gets a short tutorial. Shown before the update
+    # prompt so two dialogs never race for the user's attention.
+    if not settings.get('tutorial_shown', False):
+        QTimer.singleShot(800, show_first_launch_tutorial)
+
     global _update_timer
     _update_timer = QTimer()
     _update_timer.timeout.connect(_poll_update_check)
@@ -2436,6 +2503,18 @@ def main():
     about_timer = QTimer()
     about_timer.timeout.connect(poll_about_dialog)
     about_timer.start(200)
+
+    # Add QTimer for the shortcut-demo dialog
+    def poll_demo_dialog():
+        try:
+            demo_dialog_request_queue.get_nowait()
+        except queue.Empty:
+            return
+        show_shortcut_demos()
+
+    demo_timer = QTimer()
+    demo_timer.timeout.connect(poll_demo_dialog)
+    demo_timer.start(200)
 
     # Add QTimer for Settings dialog
     def poll_settings_dialog():

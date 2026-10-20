@@ -13,7 +13,7 @@
     <header>
         <img class="app-icon" src="icon-v1.png" alt="MAC Address Converter">
         <h1>MAC Address Converter</h1>
-        <p class="version-badge" data-version>v2.6.0</p>
+        <p class="version-badge" data-version>v2.7.0</p>
         <p class="tagline">
             Lightweight Windows tray utility for converting MAC addresses between
             12 formats &mdash; with a global hotkey, auto-cycling, and IEEE OUI
@@ -46,11 +46,18 @@
     </section>
 
     <section class="features">
-        <h2>What's new in v2.6.0</h2>
+        <h2>What's new in v2.7.0</h2>
         <ul>
-            <li><strong>Fix text typed with the wrong keyboard layout.</strong> Meant to type Hebrew but the US layout was active, so you got <code>akuo</code> instead of <code>שלום</code>? Select it, press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd>, and it's replaced with what you meant. Works both ways; press again to convert back.</li>
+            <li><strong>Pressing the hotkey again now converts the text back.</strong> In v2.6.0 it silently did nothing, because pasting the result left nothing selected for the second press to act on.</li>
+            <li><strong>See how the shortcuts work.</strong> <em>How the shortcuts work</em>, on the tray menu, plays a small looping animation of each shortcut: the text, the selection, the keypress, the result. First launch shows a short tutorial. Drawn by the app, so the download didn't grow.</li>
+            <li><strong>Safer key handling.</strong> Holding the hotkey down could previously overwrite your selection with repeated characters, or hand focus to the other app's menu bar. Both are fixed, along with a case where a clipboard held by another program could be overwritten with no way to restore it.</li>
+        </ul>
+
+        <h2 style="margin-top: 2em;">v2.6.0</h2>
+        <ul>
+            <li><strong>Fix text typed with the wrong keyboard layout.</strong> Meant to type Hebrew but the US layout was active, so you got <code>akuo</code> instead of <code>שלום</code>? Select it, press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd>, and it's replaced with what you meant.</li>
             <li>Direction is detected automatically, your clipboard is preserved, and it only ever touches text you selected.</li>
-            <li>Supports whatever keyboard layouts you have installed in Windows — no hard-coded tables.</li>
+            <li>Supports whatever keyboard layouts you have installed in Windows &mdash; no hard-coded tables.</li>
         </ul>
 
         <h2 style="margin-top: 2em;">v2.5.2</h2>
@@ -97,7 +104,7 @@
 <script>
 (function() {
     const REPO = 'aleled/mac-converter-2';
-    const FALLBACK_VERSION = '2.6.0';
+    const FALLBACK_VERSION = '2.7.0';
 
     const versionEl = document.querySelector('[data-version]');
     const btn = document.querySelector('[data-download]');

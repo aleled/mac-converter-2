@@ -24,7 +24,7 @@ class FakeIO:
     def read_selection(self, timeout_ms=600):
         return self.selection
 
-    def replace_selection(self, text):
+    def replace_selection(self, text, reselect=True):
         self.written.append(text)
         if self.replace_result:
             self.selection = text  # the app now shows the converted text, as it would
@@ -128,8 +128,15 @@ def test_replace_failure_is_reported_and_state_not_advanced(io_and_notes):
 # --- cycling ----------------------------------------------------------------
 
 @windows_only
-def test_pressing_again_on_our_own_output_cycles_rather_than_reconverting(io_and_notes):
-    """Second press re-derives from the ORIGINAL text, not from our output."""
+def test_pressing_again_reverses_or_cycles(io_and_notes):
+    """A second press must never reproduce the first result.
+
+    With two layouts there is a single candidate, so pressing again converts
+    what is on screen and the text returns to what the user typed. With three
+    or more layouts it walks to a different candidate instead. Either way,
+    pressing again has to visibly change something -- the old behaviour wrapped
+    straight back to the same answer, which read as the hotkey being dead.
+    """
     if not _he_installed():
         pytest.skip("needs he-IL layout")
     import layout_fix
@@ -141,12 +148,31 @@ def test_pressing_again_on_our_own_output_cycles_rather_than_reconverting(io_and
     ch.handle_layout_fix()          # press 2, selection is now `first`
     second = fake.written[-1]
 
+    assert second != first, "a second press must change the text"
+
     n = layout_fix.fix_text("akuo").candidate_count
     if n == 1:
-        # Only one candidate: cycling wraps, so press 2 reproduces press 1's text.
-        assert second == first
-    else:
-        assert second != first
+        assert second == "akuo", "two layouts: pressing again returns the original"
+
+
+@windows_only
+def test_reverse_round_trip_is_stable_over_several_presses(io_and_notes):
+    """Press four times on two layouts and you should land back where you started."""
+    if not _he_installed():
+        pytest.skip("needs he-IL layout")
+    import layout_fix
+    if layout_fix.fix_text("akuo").candidate_count != 1:
+        pytest.skip("needs exactly one candidate (two installed layouts)")
+    fake, notes = io_and_notes
+    fake.selection = "akuo"
+
+    seen = []
+    for _ in range(4):
+        ch.handle_layout_fix()
+        seen.append(fake.written[-1])
+
+    converted = seen[0]
+    assert seen == [converted, "akuo", converted, "akuo"], seen
 
 
 @windows_only
