@@ -2,7 +2,7 @@
 
 A lightweight Windows system tray utility for converting MAC addresses between different formats with a global hotkey, auto-cycling format selection, and clipboard integration.
 
-**Current Version:** 2.5.2
+**Current Version:** 2.6.0
 **Status:** Production-ready ✅
 **License:** MIT
 **Author:** Alejandro Lichtenfeld
@@ -12,12 +12,24 @@ A lightweight Windows system tray utility for converting MAC addresses between d
 **[https://aleled.github.io/mac-converter-2/](https://aleled.github.io/mac-converter-2/)** — one-click installer for Windows. The download portal auto-points at the latest release.
 
 Direct links to the latest version:
-- **[MAC-Converter-Setup-v2.5.2.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.5.2/MAC-Converter-Setup-v2.5.2.exe)** — Windows installer (~54 MB)
-- **[MAC-Converter.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.5.2/MAC-Converter.exe)** — Standalone executable (~51 MB)
+- **[MAC-Converter-Setup-v2.6.0.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.6.0/MAC-Converter-Setup-v2.6.0.exe)** — Windows installer (~54 MB)
+- **[MAC-Converter.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.6.0/MAC-Converter.exe)** — Standalone executable (~51 MB)
 
 ---
 
 ## What's new
+
+### 2.6.0 (2026-10-20) — Fix text typed with the wrong keyboard layout
+
+You meant to type Hebrew but the US layout was active, so you got `akuo` instead of `שלום`. Select the gibberish, press **Ctrl+Alt+L**, and it's replaced with what you meant.
+
+- Works in both directions, and pressing again converts back.
+- The direction is detected automatically; with three or more layouts installed, pressing again cycles through the others.
+- **Selection only.** If nothing is selected it does nothing and tells you. It never presses Ctrl+A on your behalf, so it can't rewrite a document you didn't highlight.
+- Your clipboard is preserved, including non-text contents.
+- Text that reads the same in every installed layout — digits, a MAC address — is left alone.
+
+Layouts come from Windows at run time, so it supports whatever you have installed. Add a layout in Windows and it's picked up with no update.
 
 ### 2.5.2 (2026-09-17) — No more keyboard hook (fixes Razer Synapse shortcuts)
 
@@ -93,6 +105,16 @@ Press the configured hotkey while a MAC address is on the clipboard. The app:
 5. Shows a popup with the converted MAC and a hint that you can press Enter for vendor lookup
 
 The "last format index" is persisted in `settings.json`, so the cycle is **resumed** across app restarts — if you ended on dot-separated lowercase before restarting, the next press starts at the format after that.
+
+### Fix wrong-keyboard-layout text
+
+Default: `Ctrl+Alt+L`. Configurable in Settings; leave the field empty to disable.
+
+Select text that came out as gibberish because the wrong keyboard layout was active, press the hotkey, and the selection is replaced with the same keystrokes reinterpreted under another installed layout. `akuo` becomes `שלום`; `דישךםצ` becomes `shalom`.
+
+It converts **only what you have selected**, never the whole field, so it cannot touch text you didn't highlight. Your clipboard is saved and restored around the operation. Pressing the hotkey again converts back (or, with three or more layouts, cycles to the next one).
+
+Characters that read the same in every installed layout are left alone, so a MAC address or a row of digits is refused rather than mangled. Selections over 5000 characters are refused.
 
 ### Global hotkey
 
@@ -552,6 +574,7 @@ Fixed in **v2.5.2**. Older versions installed a low-level keyboard hook that cou
 
 ## Version History
 
+- **2.6.0** (2026-10-20): Fix text typed with the wrong keyboard layout — select it, press Ctrl+Alt+L, get what you meant. Auto-detects direction, cycles with repeated presses, preserves the clipboard.
 - **2.5.2** (2026-09-17): Global hotkey moved from a pynput low-level keyboard hook to Windows' `RegisterHotKey` — fixes Razer Synapse shortcuts/macros breaking while the app runs; notification when the chosen hotkey is already taken; pynput dependency removed.
 - **2.5.1** (2026-05-22): Format expansion (12 formats now; new 4-4-4 dash variant; space-separated detection) + fixed double-launch at Windows startup caused by legacy installer shortcut.
 - **2.5.0** (2026-05-22): Startup update check — app fetches the latest release from the GitHub API on launch; if a newer version exists, a modal prompt offers Upgrade (opens the portal in browser, exits app) or Skip. `APP_VERSION` consolidated into a single source of truth in `update_check.py`.

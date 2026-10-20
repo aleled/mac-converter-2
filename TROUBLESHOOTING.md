@@ -260,6 +260,24 @@ When running the installed exe, there's no easy way to capture stderr (the exe i
 
 ---
 
+## The layout fixer (Ctrl+Alt+L) does nothing
+
+**First: did you select the text?** The fixer is selection-only on purpose — it converts what you highlight and nothing else, so that it can never rewrite a whole document you didn't mean to touch. With nothing selected it shows a tray notification and stops.
+
+Other reasons it declines:
+
+- **The text reads the same in every layout you have installed.** Digits, a MAC address, `hello` typed in a layout that can produce all of those — there is no other interpretation to offer, so it refuses rather than producing nonsense.
+- **You only have one keyboard layout installed.** There is nothing to convert to. Add one in Windows Settings → Time & language → Language & region.
+- **The selection is longer than 5000 characters.** Refused deliberately.
+- **The hotkey is already owned by another application.** Since v2.5.2 a tray notification tells you this at startup. Pick another in Settings → Fix wrong-keyboard-layout text.
+- **The target application is running as administrator.** Windows blocks input from our non-elevated process into an elevated window (UIPI), so the copy silently returns nothing. Nothing can work around this short of running the app elevated, which it never does by design.
+
+**It converted to the wrong language:** press it again. With two layouts that converts back; with three or more it cycles to the next candidate.
+
+**Punctuation came out wrong:** `/` and `` ` `` are not 1:1 between the US and Hebrew layouts and may not round-trip. Letters and digits always do.
+
+---
+
 ## My issue isn't here
 
 1. Open the [GitHub Issues page](https://github.com/aleled/mac-converter-2/issues) and check for similar reports.

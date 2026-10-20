@@ -5,6 +5,22 @@
 
 # Changelog
 
+## [2.6.0] - 2026-10-20
+### Added
+- **Fix text typed with the wrong keyboard layout.** Select mistyped text in any application and press the new hotkey (default `Ctrl+Alt+L`): the selection is reinterpreted under another installed keyboard layout and replaced in place. Typing `akuo` when you meant Hebrew gives `שלום`; it works in both directions, and pressing again converts back.
+  - Layouts are read from Windows at run time via `VkKeyScanExW` / `ToUnicodeEx`, so whatever layouts you have installed are supported with no hard-coded tables and no code change when you add one.
+  - The direction is detected automatically — Hebrew characters cannot be produced by the US layout and vice versa — so one press normally suffices. With three or more layouts installed, pressing again cycles through the other candidates.
+  - Selection-only by design: if nothing is selected it does nothing and says so. It never sends Ctrl+A, so it cannot rewrite a whole document you didn't highlight.
+  - Text that reads identically in every installed layout (digits, a MAC address) is refused rather than mangled.
+  - Selections longer than 5000 characters are refused.
+  - Your clipboard is saved before the operation and restored afterwards, including non-text contents.
+- New module `layout_fix.py` (conversion + layout detection, no Qt) and `selection_io.py` (capture/replace the foreground selection).
+- New setting `layout_fix_hotkey` and a field for it in the Settings dialog. Leave it empty to disable the feature.
+- 27 new tests (93 total), plus an end-to-end harness that drives a real window and verifies capture, conversion, replacement, clipboard preservation and correct behaviour while modifier keys are still physically held.
+
+### Notes
+- Only affects keys that produce one character per keypress. AltGr combinations and dead keys (Spanish `´` + `a`) pass through unchanged, as do two punctuation keys that aren't 1:1 between the US and Hebrew layouts (`/` and `` ` ``). Letters and digits are exact.
+
 ## [2.5.2] - 2026-09-17
 ### Fixed
 - **Razer Synapse shortcuts and macros stopped working while the app was running.** The global hotkey was implemented with `pynput.keyboard.Listener`, a `WH_KEYBOARD_LL` low-level keyboard hook that routes every keystroke on the machine through a Python callback. When the process was busy the callbacks lagged past Windows' hook timeout, and keystrokes from other input tools were delayed or dropped. The hotkey now uses the Win32 `RegisterHotKey` API: Windows sends a single `WM_HOTKEY` message for the configured chord and the app installs no keyboard hook at all.

@@ -1,7 +1,7 @@
 # TODO / Feature Tracker
 
-**Current Version:** 2.5.2 (Production Ready)
-**Last Updated:** 2026-09-17
+**Current Version:** 2.6.0 (Production Ready)
+**Last Updated:** 2026-10-20
 
 ---
 
@@ -167,7 +167,15 @@
 - [x] 24 new tests incl. real registration, already-in-use, re-register after stop, injected keypress delivery; app verified end to end from source with pynput uninstalled
 - [x] Corrected ARCHITECTURE.md / SECURITY.md, which had wrongly said the pynput hotkey didn't see every keystroke
 
-## Current Release (v2.5.2)
+### ✅ Milestone 19: Wrong-keyboard-layout fixer (v2.6.0)
+- [x] `layout_fix.py` — run-time char↔key maps per installed layout via `VkKeyScanExW`/`ToUnicodeEx`; no hard-coded tables
+- [x] Automatic direction detection (`typeable_score`); candidate ranking; conversions that change nothing are never offered
+- [x] `selection_io.py` — capture/replace the foreground selection, held-modifier neutralisation, clipboard snapshot/restore across all formats
+- [x] Second global hotkey (`layout_fix_hotkey`, default `ctrl+alt+l`), Settings field, empty disables
+- [x] Guards: selection-only, 5000-char cap, failed-write leaves cycling state untouched
+- [x] 27 new tests (93 total) + end-to-end harness covering a real window and held modifiers
+
+## Current Release (v2.6.0)
 
 **Status:** Production Ready ✅
 
@@ -192,7 +200,7 @@
 
 ### Build Artifacts
 - Standalone executable: `dist/MAC-Converter.exe` (~51 MB, real `.ico` icon embedded)
-- Windows installer: `installer-output/MAC-Converter-Setup-v2.5.2.exe` (~54 MB, 12 conversion formats, legacy-shortcut cleanup, startup update check)
+- Windows installer: `installer-output/MAC-Converter-Setup-v2.6.0.exe` (~54 MB, 12 conversion formats, legacy-shortcut cleanup, startup update check)
 - Source code: clean, audited, tested, fully documented (ARCHITECTURE.md, TROUBLESHOOTING.md, BUILDING.md, etc.)
 
 ---

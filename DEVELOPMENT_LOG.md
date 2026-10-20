@@ -539,3 +539,85 @@ This also exposed a wrong statement in ARCHITECTURE.md and SECURITY.md (written 
 
 - A "harmless" global hook is never harmless: it taxes every keystroke on the machine. Prefer the OS's purpose-built API (`RegisterHotKey`) over interception.
 - Write down what a component *actually* receives, not what it acts on. The earlier docs conflated the two.
+
+---
+
+## 2026-10-20 — v2.6.0: fix text typed with the wrong keyboard layout
+
+Alejandro types Hebrew and English on the same machine and regularly writes a
+whole sentence with the wrong layout active. He asked for a hotkey that reads
+the selection, reinterprets the keystrokes under the other installed layout, and
+pastes the corrected text back.
+
+### What was built
+
+- `layout_fix.py` — the conversion. For every installed layout Windows will tell
+  us, via `VkKeyScanExW`, which physical key + shift state produces a character,
+  and via `ToUnicodeEx` what that key produces under a different layout. So the
+  mapping is derived at run time and no layout tables are hard-coded: add a
+  layout in Windows and it is picked up with no code change.
+- `selection_io.py` — capture and replace the selection in the foreground
+  window. This is where the risk lives; see below.
+- A second `RegisterHotKey` registration (`ctrl+alt+l` by default), a Settings
+  field, and `handle_layout_fix()` wiring the two together.
+
+### The thing that would have broken it
+
+`RegisterHotKey` fires WM_HOTKEY while the user is still physically holding
+Ctrl+Alt. Sending Ctrl+C at that moment delivers Ctrl+Alt+C to the target
+application. `selection_io._settle_modifiers()` waits for release and
+force-releases stragglers. The end-to-end harness tests this explicitly by
+holding Ctrl+Alt down with SendInput and checking the capture still succeeds.
+
+### Design decisions
+
+- **Selection-only.** Alejandro's phrasing was "all current text available to
+  select where cursor is", which implies Ctrl+A. Rejected: Ctrl+A means "this
+  field" in a chat box and "the entire document" in an editor. A fixer that
+  pressed it on the user's behalf would eventually replace a whole document.
+  Documented in ARCHITECTURE § 6.12.
+- **Auto-detect the direction** instead of blind cycling. Hebrew characters are
+  unproducible by the US layout and vice versa, so the source layout scores 1.00
+  against 0.00 and one press is enough. Repeat presses still cycle, which is what
+  he asked for, and matter once a third layout is installed.
+- **Refuse no-op conversions.** Digits and MAC addresses read identically in
+  every installed layout; offering a "fix" for them would mangle them. Relevant
+  in this app in particular.
+
+### Testing, and two incidents while doing it
+
+93 unit tests (66 before) plus an end-to-end harness that drives a real window:
+capture, convert, replace, convert back, clipboard preservation in both
+directions, empty selection, and held modifiers. 12/12.
+
+The first version of that harness drove **Notepad**, and that was a mistake that
+cost the user real data twice:
+
+1. It located the window by image name and ran `taskkill /F /IM notepad.exe`,
+   killing a Notepad window of Alejandro's that had unsaved changes
+   (`command to issue on switches.txt`). Windows 11 session restore brought it
+   back intact.
+2. Worse: Windows 11 Notepad **restores unsaved tabs into a newly launched
+   window**. The "blank" Notepad the second harness opened contained a song
+   arrangement document of his. The test typed into it, converted the whole
+   thing to Hebrew, blanked it and closed it, consuming its tab state. It was
+   recoverable only because `read_selection` had captured the full text, which
+   was written back to `Desktop\RECOVERED-notepad-song-arrangement.txt`.
+
+Lesson, now followed: **a UI test must drive a window the test itself created
+and that cannot contain user data.** The harness builds its own Tk window. Never
+`taskkill /IM`; close by the specific HWND.
+
+A third, smaller lesson: the first run of the safe harness failed 4/8 and the
+failures were all in the *harness* — Tk binds Control-a to "line start", so the
+synthetic Ctrl+A never selected anything. Isolating one step (selecting via Tk's
+own API) showed `read_selection` had been correct all along. Check the harness
+before believing a failure.
+
+### Not useful this time
+
+An adversarial Workflow (3 independent designs of the capture/replace mechanism,
+9 critiques across distinct lenses, synthesis) was launched before implementation
+and was still running after the feature was built and verified; its first agent
+returned null. The empirical harness settled every question it was meant to
+answer. Build the thing and test it against reality when reality is available.

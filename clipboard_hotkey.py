@@ -35,6 +35,8 @@ import queue
 import ctypes
 import time
 import win_hotkey
+import layout_fix
+import selection_io
 import json
 
 # --- Atomic settings I/O (Phase 2 fix for F7, F16, F23, F28) ---
@@ -246,6 +248,11 @@ def on_quit(icon, item):
             listener.stop()
         except RuntimeError:
             pass
+    if layout_listener is not None:
+        try:
+            layout_listener.stop()
+        except RuntimeError:
+            pass
     # F26: give the OUI worker a chance to finish os.replace before the
     # process dies. The worker thread reference is held by
     # OUIDownloadDialog (which may not be reachable from here); the best
@@ -274,6 +281,90 @@ tray_icon_ready = threading.Event()
 
 # Global hotkey listener
 listener = None
+
+# v2.6.0: second global hotkey — fix text typed with the wrong keyboard layout
+layout_listener = None
+
+# Longest selection the layout fixer will rewrite. Guards against the user
+# having a whole document selected by accident: converting 50k characters and
+# pasting them back is never what they meant.
+LAYOUT_FIX_MAX_CHARS = 5000
+
+# Remembers our own last output so a repeated press cycles through the other
+# candidate layouts instead of converting our own conversion.
+_layout_fix_state = {'original': None, 'result': None, 'skip': 0}
+
+
+def _reset_layout_fix_state():
+    _layout_fix_state.update(original=None, result=None, skip=0)
+
+
+def _notify_tray(message, title="MAC Converter"):
+    """Best-effort tray notification. Safe from any thread; never raises."""
+    try:
+        if tray_icon and tray_icon_ready.is_set():
+            tray_icon.notify(message, title)
+    except Exception as e:
+        print(f"[notify] {type(e).__name__}: {e}", file=sys.stderr)
+
+
+def _ellipsis(text, limit=40):
+    """Shorten text for a notification. The selection may be sensitive."""
+    flat = " ".join(text.split())
+    return flat if len(flat) <= limit else flat[:limit - 1] + "…"
+
+
+def handle_layout_fix():
+    """Hotkey: reinterpret the selected text under a different keyboard layout.
+
+    Runs on the hotkey message-loop thread (see win_hotkey.GlobalHotkey), so it
+    must not touch Qt widgets — tray notifications only.
+    """
+    try:
+        text = selection_io.read_selection()
+    except Exception as e:
+        print(f"[layout-fix] capture failed: {type(e).__name__}: {e}", file=sys.stderr)
+        _notify_tray("Couldn't read the selection.")
+        return
+
+    if not text:
+        _notify_tray("Select the text you want to fix, then press the hotkey again.")
+        return
+    if len(text) > LAYOUT_FIX_MAX_CHARS:
+        _notify_tray(f"Selection is too long to convert ({len(text)} characters, "
+                     f"limit {LAYOUT_FIX_MAX_CHARS}).")
+        return
+
+    # A press on our own previous output means "not that one, try the next".
+    if _layout_fix_state['result'] is not None and text == _layout_fix_state['result']:
+        source = _layout_fix_state['original']
+        skip = _layout_fix_state['skip'] + 1
+    else:
+        source, skip = text, 0
+
+    result = layout_fix.fix_text(source, skip=skip)
+    if result is None:
+        _notify_tray("Nothing to convert — this text reads the same in every "
+                     "installed keyboard layout.")
+        return
+
+    try:
+        ok = selection_io.replace_selection(result.text)
+    except Exception as e:
+        print(f"[layout-fix] replace failed: {type(e).__name__}: {e}", file=sys.stderr)
+        ok = False
+    if not ok:
+        _notify_tray("Couldn't replace the selection — the text was left unchanged.")
+        return
+
+    _layout_fix_state.update(original=source, result=result.text, skip=skip)
+    if result.candidate_count > 1:
+        position = skip % result.candidate_count + 1
+        more = f"  ({position}/{result.candidate_count}, press again to cycle)"
+    else:
+        more = ""
+    _notify_tray(f"{_ellipsis(source)}  →  {_ellipsis(result.text)}\n"
+                 f"{result.src.name} → {result.dst.name}{more}")
 
 # Global notification timer management - allows cancelling previous notification
 current_notification_timer = None
@@ -1191,6 +1282,31 @@ class SettingsDialog(QDialog):
         hotkey_layout.addWidget(self.hotkey_input)
         hotkey_layout.addWidget(self.hotkey_error_label)
         hotkey_layout.addWidget(hotkey_hint)
+
+        # v2.6.0: second hotkey — fix text typed in the wrong keyboard layout
+        layout_fix_label = QLabel("Fix wrong-keyboard-layout text:")
+        self.layout_fix_input = QLineEdit()
+        self.layout_fix_input.setText(
+            settings.get('layout_fix_hotkey', DEFAULT_LAYOUT_FIX_HOTKEY))
+        self.layout_fix_input.setPlaceholderText("e.g., ctrl+alt+l  (leave empty to disable)")
+
+        installed = ", ".join(l.name for l in layout_fix.installed_layouts()) or "none detected"
+        layout_fix_hint = QLabel(
+            f"Select mistyped text anywhere, press this to convert it between your "
+            f"keyboard layouts ({installed}). Press again to cycle.")
+        layout_fix_hint.setWordWrap(True)
+        layout_fix_hint.setStyleSheet("color: #999999; font-size: 8pt; font-style: italic;")
+
+        self.layout_fix_error_label = QLabel("")
+        self.layout_fix_error_label.setStyleSheet("color: #d32f2f; font-size: 9pt;")
+        self.layout_fix_error_label.setVisible(False)
+
+        hotkey_layout.addSpacing(8)
+        hotkey_layout.addWidget(layout_fix_label)
+        hotkey_layout.addWidget(self.layout_fix_input)
+        hotkey_layout.addWidget(self.layout_fix_error_label)
+        hotkey_layout.addWidget(layout_fix_hint)
+
         hotkey_group.setLayout(hotkey_layout)
         main_layout.addWidget(hotkey_group)
 
@@ -1332,6 +1448,22 @@ class SettingsDialog(QDialog):
         else:
             self.hotkey_error_label.setVisible(False)
 
+        # Layout-fix hotkey: empty is allowed and means "disable the feature".
+        layout_fix_str = self.layout_fix_input.text().strip()
+        if layout_fix_str:
+            lf_err = _validate_hotkey_string(layout_fix_str)
+            if lf_err is not None:
+                self.layout_fix_error_label.setText(lf_err)
+                self.layout_fix_error_label.setVisible(True)
+                return
+            if layout_fix_str.lower() == hotkey_str.lower():
+                self.layout_fix_error_label.setText(
+                    "This is the same as the conversion hotkey above.")
+                self.layout_fix_error_label.setVisible(True)
+                return
+        self.layout_fix_error_label.setVisible(False)
+
+        settings['layout_fix_hotkey'] = layout_fix_str
         settings['hotkey'] = hotkey_str
         settings['notification_duration'] = self.duration_spinbox.value()
         autostart_wanted = self.autostart_checkbox.isChecked()
@@ -2013,6 +2145,7 @@ def tray_app():
         print(f"[ERROR] Tray app failed: {e}")
 
 DEFAULT_HOTKEY = 'alt+shift+m'
+DEFAULT_LAYOUT_FIX_HOTKEY = 'ctrl+alt+l'
 
 
 def listen_hotkey(app):
@@ -2062,6 +2195,30 @@ def listen_hotkey(app):
             pass
     return hk
 
+
+def listen_layout_fix_hotkey():
+    """Register the layout-fix hotkey. Returns the GlobalHotkey, or None if disabled."""
+    hotkey_str = settings.get('layout_fix_hotkey', DEFAULT_LAYOUT_FIX_HOTKEY)
+    if not hotkey_str or not str(hotkey_str).strip():
+        return None  # user cleared it: feature off
+    try:
+        hk = win_hotkey.GlobalHotkey(hotkey_str, handle_layout_fix)
+    except ValueError as e:
+        print(f"[ERROR] Invalid layout-fix hotkey '{hotkey_str}', using default "
+              f"'{DEFAULT_LAYOUT_FIX_HOTKEY}': {e}", file=sys.stderr)
+        hotkey_str = DEFAULT_LAYOUT_FIX_HOTKEY
+        hk = win_hotkey.GlobalHotkey(hotkey_str, handle_layout_fix)
+
+    hk.start()
+    if hk.wait_registered(timeout=3):
+        print(f"[INFO] Layout-fix hotkey '{hotkey_str}' registered.")
+    else:
+        message = (f"{hk.error}. Pick a different layout-fix hotkey in Settings, "
+                   f"then restart the app.")
+        print(f"[ERROR] {message}", file=sys.stderr)
+        _notify_tray(message, "MAC Converter — layout-fix hotkey not active")
+    return hk
+
 # --- Settings: Load/Save Logic ---
 SETTINGS_DIR = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'mac-converter-2')
 SETTINGS_FILENAME = 'settings.json'
@@ -2070,6 +2227,7 @@ DEFAULT_SETTINGS = {
     'autostart': False,
     'last_format_index': 0,              # Track last used format (0-9)
     'hotkey': 'alt+shift+m',             # Configurable hotkey
+    'layout_fix_hotkey': 'ctrl+alt+l',   # Fix text typed in the wrong keyboard layout
     'notification_duration': 3,          # Notification display seconds
     'author': 'Alejandro Lichtenfeld',   # Correct author name
     'license': 'MIT',
@@ -2100,6 +2258,10 @@ def _validate_settings(d):
     nd = d.get("notification_duration")
     if isinstance(nd, int) and not isinstance(nd, bool) and 1 <= nd <= 10:
         out["notification_duration"] = nd
+
+    # layout_fix_hotkey: non-empty string
+    if isinstance(d.get("layout_fix_hotkey"), str) and d["layout_fix_hotkey"].strip():
+        out["layout_fix_hotkey"] = d["layout_fix_hotkey"].strip()
 
     # autostart: strict bool
     if isinstance(d.get("autostart"), bool):
@@ -2189,7 +2351,7 @@ def main():
     # "MAC-Converter.lnk" can't both fire at boot. Idempotent.
     _cleanup_legacy_autostart_shortcuts()
 
-    global listener, oui_db
+    global listener, layout_listener, oui_db
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)  # Don't exit when dialogs close; tray manages lifecycle
 
@@ -2202,8 +2364,9 @@ def main():
         print("[ERROR] Tray icon failed to initialize")
         sys.exit(1)
 
-    # Start hotkey listener
+    # Start hotkey listeners
     listener = listen_hotkey(app)
+    layout_listener = listen_layout_fix_hotkey()
 
     # Initialize OUI database (background thread)
     if settings.get('oui_enabled', True):

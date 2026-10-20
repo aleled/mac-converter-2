@@ -13,7 +13,7 @@
     <header>
         <img class="app-icon" src="icon-v1.png" alt="MAC Address Converter">
         <h1>MAC Address Converter</h1>
-        <p class="version-badge" data-version>v2.5.2</p>
+        <p class="version-badge" data-version>v2.6.0</p>
         <p class="tagline">
             Lightweight Windows tray utility for converting MAC addresses between
             12 formats &mdash; with a global hotkey, auto-cycling, and IEEE OUI
@@ -31,6 +31,7 @@
     <section class="features">
         <h2>What it does</h2>
         <ul>
+            <li><strong>Fixes wrong-keyboard-layout text</strong> &mdash; select gibberish typed in the wrong language, press a hotkey, get what you meant</li>
             <li>Cycles through 12 MAC address formats with one keystroke (default <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>) &mdash; including space-separated detection</li>
             <li>OUI vendor lookup against the IEEE database (~38,900 vendors) &mdash; press <kbd>Enter</kbd> in the popup</li>
             <li>Runs from the system tray &mdash; no admin rights required, and <strong>no keyboard hook</strong>: plays nicely with Razer Synapse, Logitech G Hub and AutoHotkey</li>
@@ -45,7 +46,14 @@
     </section>
 
     <section class="features">
-        <h2>What's new in v2.5.2</h2>
+        <h2>What's new in v2.6.0</h2>
+        <ul>
+            <li><strong>Fix text typed with the wrong keyboard layout.</strong> Meant to type Hebrew but the US layout was active, so you got <code>akuo</code> instead of <code>שלום</code>? Select it, press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd>, and it's replaced with what you meant. Works both ways; press again to convert back.</li>
+            <li>Direction is detected automatically, your clipboard is preserved, and it only ever touches text you selected.</li>
+            <li>Supports whatever keyboard layouts you have installed in Windows — no hard-coded tables.</li>
+        </ul>
+
+        <h2 style="margin-top: 2em;">v2.5.2</h2>
         <ul>
             <li><strong>Fixed: Razer Synapse shortcuts and macros breaking while the app runs.</strong> The hotkey used a low-level keyboard hook that saw every keystroke on the machine; when the app was busy, input from tools like Synapse was delayed or dropped. It now uses Windows' native <code>RegisterHotKey</code> &mdash; no hook at all.</li>
             <li>If your chosen hotkey is already taken by another app, you now get a notification instead of a silent failure.</li>
@@ -89,7 +97,7 @@
 <script>
 (function() {
     const REPO = 'aleled/mac-converter-2';
-    const FALLBACK_VERSION = '2.5.2';
+    const FALLBACK_VERSION = '2.6.0';
 
     const versionEl = document.querySelector('[data-version]');
     const btn = document.querySelector('[data-download]');

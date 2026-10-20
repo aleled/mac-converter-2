@@ -2,7 +2,7 @@
 
 This document is the **"how it actually works"** reference. It explains the codebase module by module, the threading model, the data flow between components, the key design decisions and the reasoning behind them, and where things live on disk. The goal is that someone (including future-you) can pick this up cold months from now and understand why the code looks the way it does — and crucially, **what to preserve when fixing or changing something so we don't regress to a previous broken state.**
 
-**Last updated:** 2026-09-17 (v2.5.2)
+**Last updated:** 2026-10-20 (v2.6.0)
 
 ---
 
@@ -54,6 +54,8 @@ The producer (hotkey thread) and the consumer (Qt main thread) never touch each 
 |------|-------|------|
 | `clipboard_hotkey.py` | ~1850 | Main application: tray icon, hotkey listener, settings I/O, all PyQt5 dialogs, queue plumbing, single-instance mutex, autostart shortcut management, OUI worker lifecycle. |
 | `mac_formats.py` | ~55 | Pure-logic MAC address detection and format conversion. No I/O, no Qt. Importable in isolation. |
+| `layout_fix.py` | ~200 | Wrong-keyboard-layout conversion. Builds char↔key maps from Windows at run time (`VkKeyScanExW` / `ToUnicodeEx`) for every installed layout, detects which layout text was typed under, and ranks candidate conversions. No Qt, no I/O. |
+| `selection_io.py` | ~290 | Reads and replaces the selection in the foreground window (Ctrl+C / Ctrl+V via `SendInput`), neutralising held modifiers and preserving the clipboard. No Qt. |
 | `win_hotkey.py` | ~210 | Global hotkey via the Win32 `RegisterHotKey` API (ctypes). `parse_hotkey()` + `GlobalHotkey` thread owning the registration and its `GetMessageW` loop. No Qt. Added in v2.5.2, replacing pynput. |
 | `update_check.py` | ~130 | Startup update check against the GitHub Releases API. Holds `APP_VERSION`, the single source of truth for the version. No Qt. |
 | `oui_lookup.py` | ~270 | IEEE OUI database: download (urllib + atomic replace + content sniff), parse (csv), lookup (dict). Thread-safe. No Qt. |
@@ -271,6 +273,18 @@ The arguments against:
 
 **The current decision:** leave it monolithic. If future feature work makes the file unworkable, the right refactor is to introduce a small `AppContext` class that owns `settings`, `oui_db`, `tray_icon`, and the queues, then move each dialog into its own file with `AppContext` injected. Don't split without that scaffolding.
 
+### 6.12 The layout fixer converts only the selection (v2.6.0)
+
+The wrong-keyboard-layout fixer reads the current selection, converts it and pastes it back. It deliberately does **not** send Ctrl+A when nothing is selected, even though that would save the user a step.
+
+Ctrl+A means "select this field" in a chat box and "select the entire document" in an editor or a browser page. A fixer that pressed it on the user's behalf would, in the second case, replace an entire document with a transliteration of itself. Recoverable with Ctrl+Z, but catastrophic-looking and entirely our fault. Selection-only costs one deliberate action and removes that whole class of failure. If nothing is selected, say so and do nothing.
+
+Related guards, all for the same reason — this feature writes into applications we don't control:
+- Selections over `LAYOUT_FIX_MAX_CHARS` (5000) are refused.
+- A conversion that would change nothing is never offered (`candidates()` filters them), so digits and MAC addresses are left alone.
+- The clipboard is snapshotted across every format and restored afterwards.
+- `replace_selection` returning False leaves the cycling state untouched, so a failed write can't desynchronise the next press.
+
 ### 6.11 RegisterHotKey instead of a low-level keyboard hook (v2.5.2)
 
 **Symptom that drove this:** Razer Synapse shortcuts and macros stopped working while MAC Converter ran, and recovered when it quit.
@@ -371,6 +385,8 @@ See [`SECURITY.md`](SECURITY.md) for the full threat model and disclosure policy
 | App won't launch (single-instance check) | Look for an orphan `MAC-Converter.exe` process in Task Manager. The mutex is released on process exit; if the process is gone but the mutex isn't, restart Windows. |
 | App launches twice at Windows startup ("already running" dialog) | A leftover legacy Startup-folder shortcut (`MAC Address Converter.lnk`, pre-v2.4.0 filename) is still present alongside the canonical `MAC-Converter.lnk`. v2.5.1's runtime sweep removes it on launch; upgrading to v2.5.1 via the installer also fixes it via `[InstallDelete]`. See § 6.7 above. |
 | App launches but immediately exits | Likely a `settings.json` corruption that the rename-and-fallback didn't catch. Move `%APPDATA%\mac-converter-2\settings.json` aside and relaunch — defaults will load. |
+| Layout fixer does nothing | Almost always "nothing was selected": it is selection-only by design. Otherwise the selection may read identically in every installed layout (digits, a MAC) and is refused. Check `layout_fix.installed_layouts()` returns ≥2 — with one layout there is nothing to convert to. |
+| Layout fixer pastes into the wrong place / mangles modifiers | `selection_io._settle_modifiers()`. WM_HOTKEY arrives while Ctrl+Alt are still physically down; if that neutralisation is removed, the synthetic Ctrl+C reaches the target as Ctrl+Alt+C. See the module docstring. |
 | Update prompt doesn't appear | Either there's no newer release on GitHub, or the network request failed silently. Check stderr for `[update_check]` messages. Verify `update_check_queue` is being drained by `_update_timer` (is the timer running and connected?). |
 
 See [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) for the full user-facing troubleshooting guide.
