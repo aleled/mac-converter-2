@@ -260,6 +260,16 @@ When running the installed exe, there's no easy way to capture stderr (the exe i
 
 ---
 
+## The MAC hotkey (Alt+Shift+M) does nothing
+
+**It reads your clipboard, not your selection.** Selecting an address on screen is not enough — copy it first, press the hotkey, and the reformatted address is then on your clipboard to paste.
+
+**The clipboard must hold the address and nothing else.** `detect_mac()` matches the whole clipboard after trimming whitespace, so `MAC: 00:1A:2B:3C:4D:5E` and `mac is 001A2B3C4D5E here` are both rejected and you get "No valid MAC address in clipboard". Copy just the address.
+
+**Pressing it again moves to the next of 12 formats** rather than undoing. The format popup that appears lets you click the one you want; Escape closes it, and it closes by itself after the notification duration. Enter runs the OUI vendor lookup instead of dismissing it.
+
+---
+
 ## The layout fixer (Ctrl+Alt+L) does nothing
 
 **First: did you select the text?** The fixer is selection-only on purpose — it converts what you highlight and nothing else, so that it can never rewrite a whole document you didn't mean to touch. With nothing selected it shows a tray notification and stops.
@@ -275,7 +285,9 @@ Other reasons it declines:
 
 **It converted to the wrong language:** press it again. With two layouts that converts back; with three or more it cycles to the next candidate. (In v2.6.0 pressing again did nothing at all — fixed in v2.7.0.)
 
-**You want to see it work before trusting it:** right-click the tray icon → **How the shortcuts work**. It plays a looping animation of each shortcut, including the second press converting back.
+**You want to see it work before trusting it:** right-click the tray icon → **How the shortcuts work** for looping animations, or **Run the tutorial** for the six-step walkthrough with two steps where you try each hotkey for real.
+
+**The text did not stay selected after a conversion, so pressing again did nothing:** some editors move the caret after a paste and discard the selection the fixer leaves behind. Select the text again and press the hotkey; the conversion itself is unaffected.
 
 **Punctuation came out wrong:** `/` and `` ` `` are not 1:1 between the US and Hebrew layouts and may not round-trip. Letters and digits always do.
 

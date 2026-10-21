@@ -281,6 +281,7 @@ about_dialog_request_queue = queue.Queue()
 settings_dialog_request_queue = queue.Queue()
 format_popup_request_queue = queue.Queue()  # Queue for format popup requests
 demo_dialog_request_queue = queue.Queue()   # Queue for the shortcut-demo dialog
+tutorial_request_queue = queue.Queue()      # Queue for re-running the tutorial
 
 # Global icon reference for notifications
 tray_icon = None
@@ -790,25 +791,45 @@ def show_shortcut_demos():
               file=sys.stderr)
 
 
-def show_first_launch_tutorial():
-    """Show the one-time tutorial, then remember that we have. Qt thread only.
-
-    The flag is written even if the dialog raises, so a display problem cannot
-    make the tutorial reappear on every single launch.
-    """
+def _record_tutorial_shown():
+    """Remember that the first-launch tutorial has been presented."""
+    if settings.get('tutorial_shown') is True:
+        return
+    settings['tutorial_shown'] = True
     try:
-        if shortcut_demo is not None:
-            shortcut_demo.show_tutorial(settings.get('hotkey', DEFAULT_HOTKEY),
-                                        settings.get('layout_fix_hotkey',
-                                                     DEFAULT_LAYOUT_FIX_HOTKEY))
+        save_settings(settings)
+    except Exception as e:
+        print(f"[WARN] could not record tutorial_shown: {e}", file=sys.stderr)
+
+
+def show_tutorial_dialog():
+    """Show the stepped tutorial. Main Qt thread only.
+
+    Used both by the first launch and by the tray menu item, so re-running it
+    is the same code path as seeing it the first time.
+    """
+    if shortcut_demo is None:
+        _notify_tray("The tutorial is unavailable in this build.")
+        return
+    try:
+        shortcut_demo.show_tutorial(settings.get('hotkey', DEFAULT_HOTKEY),
+                                    settings.get('layout_fix_hotkey',
+                                                 DEFAULT_LAYOUT_FIX_HOTKEY))
     except Exception as e:
         print(f"[WARN] tutorial failed: {type(e).__name__}: {e}", file=sys.stderr)
-    finally:
-        settings['tutorial_shown'] = True
-        try:
-            save_settings(settings)
-        except Exception as e:
-            print(f"[WARN] could not record tutorial_shown: {e}", file=sys.stderr)
+
+
+def show_first_launch_tutorial():
+    """First launch only: record that we have shown it, then show it.
+
+    The flag is written BEFORE the dialog opens, not after it closes. If the
+    process is killed or crashes while the tutorial is on screen, the user has
+    still seen it -- and a tutorial that reappears at every single launch is a
+    worse failure than one the user closed early. It can always be re-run from
+    the tray menu, so nothing is lost either way.
+    """
+    _record_tutorial_shown()
+    show_tutorial_dialog()
 
 # --- OUI Database Viewer ---
 class OUIViewerDialog(QDialog):
@@ -2185,12 +2206,16 @@ def tray_app():
         def demo_callback(icon, item):
             demo_dialog_request_queue.put(True)
 
+        def tutorial_callback(icon, item):
+            tutorial_request_queue.put(True)
+
         tray_icon = pystray.Icon(
             "mac_converter",
             create_image(),
             "MAC Converter",
             menu=pystray.Menu(
                 pystray.MenuItem("Settings", settings_callback),
+                pystray.MenuItem("Run the tutorial", tutorial_callback),
                 pystray.MenuItem("How the shortcuts work", demo_callback),
                 pystray.MenuItem("About", about_callback),
                 pystray.MenuItem("Quit", on_quit)
@@ -2515,6 +2540,18 @@ def main():
     demo_timer = QTimer()
     demo_timer.timeout.connect(poll_demo_dialog)
     demo_timer.start(200)
+
+    # Add QTimer for re-running the tutorial
+    def poll_tutorial():
+        try:
+            tutorial_request_queue.get_nowait()
+        except queue.Empty:
+            return
+        show_tutorial_dialog()
+
+    tutorial_timer = QTimer()
+    tutorial_timer.timeout.connect(poll_tutorial)
+    tutorial_timer.start(200)
 
     # Add QTimer for Settings dialog
     def poll_settings_dialog():

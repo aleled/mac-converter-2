@@ -13,7 +13,7 @@
     <header>
         <img class="app-icon" src="icon-v1.png" alt="MAC Address Converter">
         <h1>MAC Address Converter</h1>
-        <p class="version-badge" data-version>v2.7.0</p>
+        <p class="version-badge" data-version>v2.8.0</p>
         <p class="tagline">
             Lightweight Windows tray utility for converting MAC addresses between
             12 formats &mdash; with a global hotkey, auto-cycling, and IEEE OUI
@@ -46,11 +46,18 @@
     </section>
 
     <section class="features">
-        <h2>What's new in v2.7.0</h2>
+        <h2>What's new in v2.8.0</h2>
         <ul>
-            <li><strong>Pressing the hotkey again now converts the text back.</strong> In v2.6.0 it silently did nothing, because pasting the result left nothing selected for the second press to act on.</li>
-            <li><strong>See how the shortcuts work.</strong> <em>How the shortcuts work</em>, on the tray menu, plays a small looping animation of each shortcut: the text, the selection, the keypress, the result. First launch shows a short tutorial. Drawn by the app, so the download didn't grow.</li>
-            <li><strong>Safer key handling.</strong> Holding the hotkey down could previously overwrite your selection with repeated characters, or hand focus to the other app's menu bar. Both are fixed, along with a case where a clipboard held by another program could be overwritten with no way to restore it.</li>
+            <li><strong>The tutorial was wrong about the MAC hotkey, and is fixed.</strong> It showed MAC conversion as though you select an address and it gets replaced. It never worked that way. <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd> reads <em>your clipboard</em> and writes the reformatted address back to <em>your clipboard</em> &mdash; copy, press, paste. Only <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd> works on the selection and replaces it in place.</li>
+            <li><strong>The clipboard must hold the address and nothing else.</strong> <code>mac is 001A2B3C4D5E here</code> is rejected &mdash; copy just the address. That is the other common reason the hotkey seems to do nothing, and the tutorial now says so.</li>
+            <li><strong>A six-step wizard you can actually try.</strong> Back / Next / Finish, explanation bubbles on every step, and two hands-on steps: one seeds a sample MAC and shows a live clipboard read-out so you watch it change format, the other gives you a real text box holding <code>akuo</code> to select, convert in place, and press again to revert.</li>
+            <li><strong>It runs once, not every launch</strong> &mdash; and <em>Run the tutorial</em> on the tray menu replays it whenever you like.</li>
+        </ul>
+
+        <h2 style="margin-top: 2em;">v2.7.0</h2>
+        <ul>
+            <li><strong>Pressing the layout hotkey again now converts the text back.</strong> In v2.6.0 it silently did nothing, because pasting the result left nothing selected for the second press to act on.</li>
+            <li><strong>Safer key handling.</strong> Holding the hotkey down could previously overwrite your selection with repeated characters, or hand focus to the other app's menu bar. Both fixed, along with a case where a clipboard held by another program could be overwritten with no way to restore it.</li>
         </ul>
 
         <h2 style="margin-top: 2em;">v2.6.0</h2>
@@ -104,7 +111,7 @@
 <script>
 (function() {
     const REPO = 'aleled/mac-converter-2';
-    const FALLBACK_VERSION = '2.7.0';
+    const FALLBACK_VERSION = '2.8.0';
 
     const versionEl = document.querySelector('[data-version]');
     const btn = document.querySelector('[data-download]');

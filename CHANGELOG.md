@@ -5,6 +5,28 @@
 
 # Changelog
 
+## [2.8.0] - 2026-10-21
+### Fixed
+- **The tutorial described the MAC hotkey wrongly.** It animated MAC conversion as though it replaced selected text. It does not, and never has: `handle_hotkey()` reads `pyperclip.paste()`, converts, and writes the result back with `pyperclip.copy()`. Nothing on screen is touched. The two shortcuts work on opposite principles and the tutorial now says so in as many words:
+  - `Alt+Shift+M` (MAC formats) reads **the clipboard** and writes back to **the clipboard**. Copy an address, press it, paste the result.
+  - `Ctrl+Alt+L` (keyboard layout) reads **the selection** and **replaces it in place**.
+  - The animation for the MAC hotkey was rebuilt around two clipboard cards and a travelling chip, so nothing in it suggests a selection. Its twelve sample strings come from the real `convert_mac()` cycle, in the real order.
+- **The clipboard must contain the address and nothing else.** `detect_mac()` is a `fullmatch` against the stripped clipboard, so `mac is 001A2B3C4D5E here` is rejected. This is the other half of why the hotkey appears to do nothing, and the tutorial now states it.
+- **The tutorial reappeared at every launch.** `tutorial_shown` was written after the dialog closed, so anything that ended the process while it was on screen left it unrecorded. It is now recorded **before** the dialog opens: if the app is killed mid-tutorial the user has still seen it, and it can be re-run from the tray at any time. A tutorial that reappears forever is a worse failure than one closed early.
+- **Re-selection after a paste was firing too early for some toolkits.** Measured against a Qt `QLineEdit`, re-selecting immediately after the clipboard restore survived roughly one attempt in five; a longer settle was reliable. `RESELECT_DELAY_MS` (120 ms) now precedes the Shift+Left. This is a mitigation, not a guarantee -- an application that moves the caret later still drops the selection, and the user simply selects the text again. Documented rather than claimed as solved.
+
+### Added
+- **The tutorial is a six-step wizard** with Back / Next / Finish, a "Step N of 6" indicator and dots, and explanation bubbles on every step rather than one wall of text.
+- **Two steps where you actually try it.**
+  - MAC: a button puts a sample address on your clipboard, and a live read-out polls the clipboard so you watch it change format when you press the hotkey. Success is detected by the same twelve hex digits appearing in a different format; a clipboard holding something else shows the app's real refusal message instead.
+  - Layout: a real text box pre-filled with `akuo` that you select and convert in place, then press again to revert. Success is detected by the 1:1 signature of a layout swap -- same length, every character changed -- so typing by hand is not mistaken for it. The box re-selects its own contents afterwards, because not every widget keeps the selection the hotkey leaves behind.
+- **Tray menu: "Run the tutorial"**, so it can be replayed deliberately instead of only on first launch. Re-running ignores the flag and does not rewrite settings.
+- 16 new tests (137 total) covering when the tutorial is shown and recorded, including one that asserts the flag is already set at the moment the dialog opens.
+
+### Notes
+- In the format-selector popup, Enter triggers the OUI vendor lookup rather than dismissing it; Escape closes it, and it also closes on its own after `notification_duration`. The tutorial says this.
+- The "three or more installed layouts" cycling path is described but untested here -- this machine has only en-US and he-IL.
+
 ## [2.7.0] - 2026-10-20
 ### Fixed
 - **Converting the text back didn't work at all.** v2.6.0 advertised that a second press would convert the text back, and it could not: `replace_selection()` pasted the new text and left the caret at the end with *nothing selected*, so the next press read an empty selection and reported "nothing selected". The pasted text is now left selected — `Shift+Left` over its caret length, as one atomic `SendInput` batch — so pressing the hotkey again acts on it. With two layouts installed that reverses the conversion, and the round trip is stable over repeated presses.

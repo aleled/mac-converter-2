@@ -2,7 +2,7 @@
 
 A lightweight Windows system tray utility for converting MAC addresses between different formats with a global hotkey, auto-cycling format selection, and clipboard integration.
 
-**Current Version:** 2.7.0
+**Current Version:** 2.8.0
 **Status:** Production-ready ✅
 **License:** MIT
 **Author:** Alejandro Lichtenfeld
@@ -12,12 +12,29 @@ A lightweight Windows system tray utility for converting MAC addresses between d
 **[https://aleled.github.io/mac-converter-2/](https://aleled.github.io/mac-converter-2/)** — one-click installer for Windows. The download portal auto-points at the latest release.
 
 Direct links to the latest version:
-- **[MAC-Converter-Setup-v2.7.0.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.7.0/MAC-Converter-Setup-v2.7.0.exe)** — Windows installer (~54 MB)
-- **[MAC-Converter.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.7.0/MAC-Converter.exe)** — Standalone executable (~51 MB)
+- **[MAC-Converter-Setup-v2.8.0.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.8.0/MAC-Converter-Setup-v2.8.0.exe)** — Windows installer (~54 MB)
+- **[MAC-Converter.exe](https://github.com/aleled/mac-converter-2/releases/download/v2.8.0/MAC-Converter.exe)** — Standalone executable (~51 MB)
 
 ---
 
 ## What's new
+
+### 2.8.0 (2026-10-21) — The tutorial was wrong about the MAC hotkey
+
+The first-launch tutorial showed MAC conversion as though you select an address and it gets replaced. That is not how it works and never was. The two shortcuts are opposites:
+
+| | `Alt+Shift+M` — MAC formats | `Ctrl+Alt+L` — keyboard layout |
+|---|---|---|
+| Reads | **your clipboard** | the **selected** text |
+| Writes | back to **your clipboard** | **replaces the selection** in place |
+| So you | copy, press, paste | select, press |
+| Press again | next of 12 formats | converts it back |
+
+The clipboard has to hold the address *and nothing else* — `mac is 001A2B3C4D5E here` is rejected. That is the other common reason the hotkey seems to do nothing, and the tutorial now says so.
+
+**The tutorial is now a six-step wizard** with Back / Next / Finish and explanation bubbles on each step, and **two steps where you actually try it**: one that puts a sample MAC on your clipboard and shows a live read-out so you watch it change format, and one with a real text box holding `akuo` that you select and convert in place, then press again to revert.
+
+**It runs once**, not at every launch — the flag is now recorded before the dialog opens rather than after it closes, so killing the app mid-tutorial no longer makes it come back forever. **Tray menu → "Run the tutorial"** replays it whenever you want.
 
 ### 2.7.0 (2026-10-21) — Converting back actually works, and see how the shortcuts work
 
@@ -586,6 +603,7 @@ Fixed in **v2.5.2**. Older versions installed a low-level keyboard hook that cou
 
 ## Version History
 
+- **2.8.0** (2026-10-21): Corrected the tutorial, which wrongly showed MAC conversion as selection-based when it is clipboard-based. Rebuilt it as a six-step wizard with explanation bubbles and two hands-on practice steps. It now runs once rather than at every launch, and can be replayed from the tray menu.
 - **2.7.0** (2026-10-21): Pressing the layout hotkey again converts back (it never did). Animated per-shortcut demos under Help, plus a first-launch tutorial. Four fixes in the modifier-handling path, including one that could overwrite the selection with repeated characters when the hotkey was held down.
 - **2.6.0** (2026-10-20): Fix text typed with the wrong keyboard layout — select it, press Ctrl+Alt+L, get what you meant. Auto-detects direction, cycles with repeated presses, preserves the clipboard.
 - **2.5.2** (2026-09-17): Global hotkey moved from a pynput low-level keyboard hook to Windows' `RegisterHotKey` — fixes Razer Synapse shortcuts/macros breaking while the app runs; notification when the chosen hotkey is already taken; pynput dependency removed.

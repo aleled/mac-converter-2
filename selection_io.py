@@ -136,6 +136,7 @@ CLIPBOARD_POLL_MS = 10               # how often to check for a clipboard change
 PASTE_SETTLE_MS = 150                # before restoring the clipboard after paste
 CLIPBOARD_RETRY_MS = 300             # total time to keep retrying a locked clipboard
 RESELECT_MAX_CHARS = 2000            # above this we skip re-selecting after a paste
+RESELECT_DELAY_MS = 120              # extra settle before re-selecting (see below)
 
 
 def _modifiers_down():
@@ -428,9 +429,18 @@ def replace_selection(text, reselect=True):
         # Leave the pasted text selected. Without this the caret sits at the end
         # with nothing selected, so pressing the hotkey again reads an empty
         # selection and the user cannot convert the text back.
+        #
+        # The extra settle matters: some toolkits finish applying the paste
+        # asynchronously and move the caret again afterwards, which discards a
+        # selection made too early. Measured against a Qt QLineEdit, re-selecting
+        # immediately after the clipboard restore survived about one attempt in
+        # five; waiting longer was reliable. This is a mitigation, not a
+        # guarantee -- an app that resets the caret later still drops it, and the
+        # user simply selects the text again.
         if reselect:
             n = _caret_length(text)
             if n <= RESELECT_MAX_CHARS:
+                time.sleep(RESELECT_DELAY_MS / 1000.0)
                 _reselect_left(n)
         return True
     except Exception as e:

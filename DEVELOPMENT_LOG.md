@@ -717,3 +717,94 @@ the round trip with no manual re-selection at all.
   treating the agreement as corroboration.
 - A slow adversarial design pass is not worthless just because it lands after the
   feature ships. Read it when it arrives.
+
+---
+
+## 2026-10-21 — v2.8.0: the tutorial was wrong, and three harnesses lied to me
+
+### The report
+
+"the mac conversion does not depend on selecting the text but on it being in the
+clipboard last value, while the text converter (Between languages) does. the
+tutorial is poorly designed."
+
+Correct on every count. `handle_hotkey()` reads `pyperclip.paste()`, converts,
+and writes back with `pyperclip.copy()`; nothing on screen is touched. The
+tutorial animated it as a selection being replaced.
+
+**The error was mine, not the subagent's.** I wrote its brief and told it "the
+user selects a MAC address anywhere, presses the hotkey, and the selected text
+is replaced". It implemented my specification faithfully. Delegation does not
+dilute responsibility for the spec: a subagent will build what you describe,
+including your misunderstandings, and it will look professionally finished while
+doing it.
+
+When I rewrote the brief from the actual source, the subagent came back with
+three corrections to it:
+
+1. `detect_mac()` is `MAC_REGEX.fullmatch(text.strip())`, so the clipboard must
+   hold the address and nothing else. I had written "finds a MAC anywhere in
+   that text". Verified: `detect_mac('mac is 001A2B3C4D5E here')` is None.
+2. Enter in the format popup fires the OUI vendor lookup; it does not dismiss.
+3. "It leaves its output selected, so pressing again converts back" is a race,
+   not a guarantee -- measured surviving 1 of 5 attempts against a QLineEdit.
+
+All three were right. Asking for disagreement in the brief is cheap and it paid
+for itself three times over.
+
+### Three harnesses that lied, in one session
+
+A theme worth recording, because the pattern is now unmistakable.
+
+- v2.6.0's e2e "proved" the round trip because the harness re-selected with
+  Ctrl+A between presses. The feature was broken in every real application.
+- `FakeIO.replace_selection()` set `self.selection = text`, simulating a
+  re-selection the real code never performed. Two test layers agreed with each
+  other, and agreement between two layers that share an assumption is not
+  corroboration.
+- Today, three separate probes reported the feature catastrophically broken
+  (`read_selection() -> None`, 10 of 13 e2e checks failing). Every one was the
+  harness failing to take the Windows foreground while the user was actively
+  working in another window. The instrumented probe said it plainly:
+  `foreground pid=40900 ours_pid=47760 match=False`.
+
+The rule that covers all of it: **a harness that is more capable, or less
+capable, than the real caller is testing itself.** Before believing either a
+pass or a failure, ask what the harness does that the caller does not, and
+assert the preconditions explicitly rather than inferring them from the result.
+
+### Injecting input into the user's machine
+
+Two of those probes sent Ctrl+C into whatever actually held the foreground --
+Brave on a Meraki dashboard, and the Claude desktop app. Nothing was taken or
+modified (the clipboard sequence number never moved, and `replace_selection()`
+was never reached, so no Ctrl+V was sent), but it was luck rather than design.
+
+Injection tests are only safe when the harness provably owns the foreground.
+Checking at start-up is not enough: focus moves. Assert immediately before every
+injection and abort otherwise, and do not run them at all while the user is
+working. I stopped injection testing for the rest of the session and leaned on
+the 137 unit tests instead.
+
+### What shipped
+
+- Tutorial rebuilt as a six-step wizard: Back/Next/Finish, step indicator and
+  dots, explanation bubbles per step, and two steps that drive the real hotkeys
+  against the dialog's own widgets.
+- MAC animation rebuilt around clipboard-in / clipboard-out cards, with its 12
+  strings taken from the real `convert_mac()` cycle.
+- `tutorial_shown` is recorded **before** the dialog opens. It used to be
+  written after it closed, so killing the app mid-tutorial left it unrecorded --
+  which is exactly what my own repeated restarts did, and why the user saw it at
+  every launch. A tutorial that reappears forever is worse than one closed early.
+- Tray menu: "Run the tutorial".
+- `RESELECT_DELAY_MS` (120 ms) before the Shift+Left, as a mitigation for the
+  race above. Documented as a mitigation, not a fix.
+
+### Lessons
+
+- You own your subagents' specifications. Review the brief as carefully as the
+  diff, and invite the agent to contradict it.
+- Assert preconditions in a harness; never infer them from the outcome.
+- Never inject synthetic input without proving, at that instant, that the
+  foreground window is yours.
